@@ -1,0 +1,17 @@
+{
+  "name": "nexoai-whatsapp",
+  "version": "0.1.0",
+  "description": "Asistente virtual NexoAI para WhatsApp, con Claude",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "express": "^4.19.2"
+  }
+}
