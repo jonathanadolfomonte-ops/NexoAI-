@@ -75,13 +75,18 @@ function firmaValida(req) {
 
 // Meta manda aca cada mensaje que escribe un cliente
 app.post("/webhook", (req, res) => {
-  if (!firmaValida(req)) return res.sendStatus(401);
+  console.log("Webhook POST recibido");
+  if (!firmaValida(req)) {
+    console.error("Firma invalida: revisar META_APP_SECRET");
+    return res.sendStatus(401);
+  }
   res.sendStatus(200); // responder rapido; Meta reintenta si tarda
 
   const mensajes = (req.body.entry || [])
     .flatMap((e) => e.changes || [])
     .flatMap((c) => c.value?.messages || []);
 
+  console.log("Mensajes recibidos:", mensajes.length);
   for (const m of mensajes) {
     procesar(m).catch((err) => console.error("Error procesando mensaje:", err));
   }
