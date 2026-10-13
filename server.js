@@ -2,6 +2,7 @@ import express from "express";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
 const {
   PORT = 3000,
@@ -10,6 +11,9 @@ const {
   WHATSAPP_VERIFY_TOKEN,
   META_APP_SECRET,
   ANTHROPIC_API_KEY,
+  OPENAI_API_KEY,
+  OPENAI_MODEL = "gpt-4.1-mini",
+  OWNER_WHATSAPP_NUMBER,
   CLAUDE_MODEL = "claude-sonnet-5-5",
   WHATSAPP_API_VERSION = "v21.0",
 } = process.env;
@@ -32,10 +36,15 @@ const instrucciones = fs.readFileSync(
   "utf-8"
 );
 const claude = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+// OpenAI es opcional para no interrumpir el servicio comercial si aún no está configurado.
+const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
+const numeroPropietario = String(OWNER_WHATSAPP_NUMBER || "").replace(/\\D/g, "");
 
 // Memoria corta de cada conversacion (se borra si el servidor se reinicia)
 const MAX_HISTORIAL = 10;
 const historiales = new Map();
+// Historial separado para la asistencia personal del propietario.
+const historialesOpenAI = new Map();
 const vistos = new Set();
 
 const app = express();
@@ -104,6 +113,13 @@ async function procesar(m) {
     return;
   }
 
+  // Solo el número personal configurado usa OpenAI; los clientes siguen con Claude.
+  const numeroNormalizado = String(numero || "").replace(/\\D/g, "");
+  if (numeroPropietario && numeroNormalizado === numeroPropietario) {
+    await procesarPersonalOpenAI(numero, m.text.body);
+    return;
+  }
+
   const historial = historiales.get(numero) || [];
   historial.push({ role: "user", content: m.text.body });
 
@@ -137,6 +153,45 @@ async function procesar(m) {
   historiales.set(numero, historial);
 
   await enviar(numero, respuesta);
+}
+
+async function procesarPersonalOpenAI(numero, texto) {
+  if (!openai) {
+    await enviar(
+      numero,
+      "La asistencia personal con OpenAI todavía no está activada. Falta configurar su clave de API en el servidor; el servicio habitual de NexoAI sigue funcionando."
+    );
+    return;
+  }
+
+  const historial = historialesOpenAI.get(numero) || [];
+  historial.push({ role: "user", content: texto });
+
+  try {
+    const r = await openai.responses.create({
+      model: OPENAI_MODEL,
+      instructions:
+        "Sos un asistente personal útil, claro y cercano que conversa en español rioplatense. Ayudá al propietario con sus consultas y proyectos. No afirmes que sos la sesión de ChatGPT ni que tenés acceso a sus recuerdos o conversaciones fuera de este chat de WhatsApp. Si no sabés algo, decilo con honestidad.",
+      input: historial,
+      max_output_tokens: 500,
+    });
+
+    const respuesta = (r.output_text || "").trim() ||
+      "No pude preparar una respuesta. ¿Podés volver a escribirme?";
+    historial.push({ role: "assistant", content: respuesta });
+    while (historial.length > MAX_HISTORIAL) historial.shift();
+    if (historial[0]?.role === "assistant") historial.shift();
+    historialesOpenAI.set(numero, historial);
+    await enviar(numero, respuesta);
+  } catch (err) {
+    console.error("Error con OpenAI para asistencia personal:", err);
+    historial.pop();
+    historialesOpenAI.set(numero, historial);
+    await enviar(
+      numero,
+      "La asistencia personal está teniendo un problema técnico. El servicio habitual de NexoAI para clientes sigue separado. Probá de nuevo más tarde."
+    );
+  }
 }
 
 // Meta puede rechazar numeros argentinos segun el formato (549... / 54... / 54 + area + 15 + numero).
