@@ -38,7 +38,7 @@ const instrucciones = fs.readFileSync(
 const claude = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 // OpenAI es opcional para no interrumpir el servicio comercial si aún no está configurado.
 const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
-const numeroPropietario = String(OWNER_WHATSAPP_NUMBER || "").replace(/\\D/g, "");
+const numeroPropietario = String(OWNER_WHATSAPP_NUMBER || "").replace(/\D/g, "");
 
 // Memoria corta de cada conversacion (se borra si el servidor se reinicia)
 const MAX_HISTORIAL = 10;
@@ -114,7 +114,7 @@ async function procesar(m) {
   }
 
   // Solo el número personal configurado usa OpenAI; los clientes siguen con Claude.
-  const numeroNormalizado = String(numero || "").replace(/\\D/g, "");
+  const numeroNormalizado = String(numero || "").replace(/\D/g, "");
   if (numeroPropietario && numeroNormalizado === numeroPropietario) {
     await procesarPersonalOpenAI(numero, m.text.body);
     return;
