@@ -139,9 +139,23 @@ async function procesar(m) {
   await enviar(numero, respuesta);
 }
 
-async function enviar(numero, texto) {
+// Meta puede rechazar numeros argentinos segun el formato (549... / 54... / 54 + area + 15 + numero).
+// Se prueba el formato original y, solo si Meta responde 131030, las otras variantes.
+function variantesNumero(numero) {
+  const lista = [numero];
+  if (/^549\d{10}$/.test(numero)) {
+    const resto = numero.slice(3); // codigo de area + abonado (10 digitos)
+    lista.push("54" + resto);
+    for (const largoArea of [3, 2, 4]) {
+      lista.push("54" + resto.slice(0, largoArea) + "15" + resto.slice(largoArea));
+    }
+  }
+  return lista;
+}
+
+async function enviarA(destino, texto) {
   const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
-  const r = await fetch(url, {
+  return fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${WHATSAPP_TOKEN}`,
@@ -149,13 +163,23 @@ async function enviar(numero, texto) {
     },
     body: JSON.stringify({
       messaging_product: "whatsapp",
-      to: numero,
+      to: destino,
       type: "text",
       text: { body: texto },
     }),
   });
-  if (!r.ok) {
-    console.error("Error enviando a WhatsApp:", r.status, await r.text());
+}
+
+async function enviar(numero, texto) {
+  for (const destino of variantesNumero(numero)) {
+    const r = await enviarA(destino, texto);
+    if (r.ok) {
+      console.log(`Mensaje enviado a ${destino}${destino !== numero ? ` (formato alternativo; Meta lo recibio como ${numero})` : ""}`);
+      return;
+    }
+    const cuerpo = await r.text();
+    console.error(`Error enviando a WhatsApp (destino ${destino}):`, r.status, cuerpo);
+    if (!cuerpo.includes("131030")) return; // otro error: no tiene sentido probar otros formatos
   }
 }
 
