@@ -132,10 +132,13 @@ async function procesar(m) {
 
   // Si el cliente confirmo un pedido, el modelo agrega una linea "[[PEDIDO]] resumen".
   // Se la saca del mensaje al cliente y se le avisa al dueño.
-  const { texto, pedido } = separarPedido(respuesta);
+  const { texto, pedido, derivar } = separarMarcas(respuesta);
   respuesta = texto;
   if (pedido) {
     avisarPedido(numero, pedido).catch((err) => console.error("Error avisando el pedido:", err));
+  }
+  if (derivar) {
+    avisarDerivacion(numero, derivar).catch((err) => console.error("Error avisando la derivacion:", err));
   }
 
   if (!respuesta) respuesta = "Disculpá, no pude armar una respuesta. ¿Me lo repetís?";
@@ -149,16 +152,43 @@ async function procesar(m) {
   await enviar(numero, respuesta);
 }
 
-const MARCA_PEDIDO = /\[\[PEDIDO\]\]([\s\S]*)$/;
+// El modelo agrega lineas internas al final de su respuesta: [[PEDIDO]] ... o [[DERIVAR]] ...
+// Se las saca siempre del mensaje al cliente (incluso si vienen mal escritas o en medio del texto).
+const MARCA_PEDIDO = /\[\[PEDIDO\]\][ \t]*([^\n]*)/i;
+const MARCA_DERIVAR = /\[\[DERIVAR\]\][ \t]*([^\n]*)/i;
+const MARCA_SUELTA = /\[\[[A-Z_]+\]\]/gi;
 
-function separarPedido(respuesta) {
-  const m = respuesta.match(MARCA_PEDIDO);
-  if (!m) return { texto: respuesta, pedido: null };
-  const resumen = m[1].trim();
-  return {
-    texto: respuesta.replace(MARCA_PEDIDO, "").trim(),
-    pedido: resumen || null,
+function separarMarcas(respuesta) {
+  let texto = respuesta;
+  const sacar = (re) => {
+    const m = texto.match(re);
+    if (!m) return null;
+    texto = texto.replace(re, "");
+    return m[1].trim() || "(sin detalle)";
   };
+  const pedido = sacar(MARCA_PEDIDO);
+  const derivar = sacar(MARCA_DERIVAR);
+  texto = texto.replace(MARCA_SUELTA, "").replace(/\n{3,}/g, "\n\n").trim();
+  return { texto, pedido, derivar };
+}
+
+// Para no avisar muchas veces por la misma conversacion
+const derivaciones = new Map();
+const ESPERA_ENTRE_AVISOS_MS = 30 * 60 * 1000;
+
+async function avisarDerivacion(numeroCliente, motivo) {
+  if (!OWNER_WHATSAPP_NUMBER) {
+    console.error("Cliente derivado pero falta OWNER_WHATSAPP_NUMBER. Motivo:", motivo);
+    return;
+  }
+  const ultimo = derivaciones.get(numeroCliente) || 0;
+  if (Date.now() - ultimo < ESPERA_ENTRE_AVISOS_MS) return;
+  derivaciones.set(numeroCliente, Date.now());
+  const aviso =
+    `🙋 Un cliente quiere hablar con una persona\n\nMotivo: ${motivo}\n\n` +
+    `Cliente: +${numeroCliente}\nEscribirle: https://wa.me/${numeroCliente}`;
+  await enviar(OWNER_WHATSAPP_NUMBER, aviso);
+  console.log("Aviso de derivacion enviado al dueño");
 }
 
 async function avisarPedido(numeroCliente, resumen) {
