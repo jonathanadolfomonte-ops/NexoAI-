@@ -12,6 +12,8 @@ const {
   ANTHROPIC_API_KEY,
   CLAUDE_MODEL = "claude-sonnet-5-5",
   WHATSAPP_API_VERSION = "v21.0",
+  // Numero del dueño que recibe el aviso de cada pedido confirmado (formato 549 + area + numero, sin + ni 15)
+  OWNER_WHATSAPP_NUMBER,
 } = process.env;
 
 const requeridas = [
@@ -128,6 +130,14 @@ async function procesar(m) {
     return;
   }
 
+  // Si el cliente confirmo un pedido, el modelo agrega una linea "[[PEDIDO]] resumen".
+  // Se la saca del mensaje al cliente y se le avisa al dueño.
+  const { texto, pedido } = separarPedido(respuesta);
+  respuesta = texto;
+  if (pedido) {
+    avisarPedido(numero, pedido).catch((err) => console.error("Error avisando el pedido:", err));
+  }
+
   if (!respuesta) respuesta = "Disculpá, no pude armar una respuesta. ¿Me lo repetís?";
 
   historial.push({ role: "assistant", content: respuesta });
@@ -137,6 +147,30 @@ async function procesar(m) {
   historiales.set(numero, historial);
 
   await enviar(numero, respuesta);
+}
+
+const MARCA_PEDIDO = /\[\[PEDIDO\]\]([\s\S]*)$/;
+
+function separarPedido(respuesta) {
+  const m = respuesta.match(MARCA_PEDIDO);
+  if (!m) return { texto: respuesta, pedido: null };
+  const resumen = m[1].trim();
+  return {
+    texto: respuesta.replace(MARCA_PEDIDO, "").trim(),
+    pedido: resumen || null,
+  };
+}
+
+async function avisarPedido(numeroCliente, resumen) {
+  if (!OWNER_WHATSAPP_NUMBER) {
+    console.error("Pedido confirmado pero falta OWNER_WHATSAPP_NUMBER. Resumen:", resumen);
+    return;
+  }
+  const aviso =
+    `🛒 Nuevo pedido por WhatsApp\n\n${resumen}\n\n` +
+    `Cliente: +${numeroCliente}\nEscribirle: https://wa.me/${numeroCliente}`;
+  await enviar(OWNER_WHATSAPP_NUMBER, aviso);
+  console.log("Aviso de pedido enviado al dueño");
 }
 
 // Meta puede rechazar numeros argentinos segun el formato (549... / 54... / 54 + area + 15 + numero).
