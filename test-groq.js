@@ -9,13 +9,6 @@
  *   GROQ_API_KEY   (obligatoria; guardarla como variable de entorno, nunca en el código)
  *   GROQ_MODEL     (opcional; por defecto openai/gpt-oss-20b)
  *
- * Ejecución:
- *   npm install
- *   GROQ_API_KEY="tu_clave" node test-groq.js
- *
- * En Windows PowerShell:
- *   $env:GROQ_API_KEY="tu_clave"; node test-groq.js
- *
  * Nunca pegues la clave en GitHub, mensajes ni capturas.
  */
 
@@ -39,22 +32,27 @@ try {
     model,
     messages: [
       {
-        role: "system",
-        content: "Respondé en español rioplatense, con una frase breve y clara.",
-      },
-      {
         role: "user",
         content: "Respondé exactamente: Prueba de Groq exitosa.",
       },
     ],
     temperature: 0,
-    max_tokens: 40,
+    max_completion_tokens: 1024,
+    reasoning_effort: "low",
+    include_reasoning: false,
   });
 
-  const answer = response.choices?.[0]?.message?.content?.trim();
+  const choice = response.choices?.[0];
+  const answer = typeof choice?.message?.content === "string"
+    ? choice.message.content.trim()
+    : "";
 
   if (!answer) {
-    console.error("Groq respondió, pero no devolvió texto. Revisá el modelo y la respuesta de la API.");
+    console.error("Groq aceptó la solicitud, pero no devolvió texto visible.");
+    console.error("Modelo informado:", response.model || model);
+    console.error("Motivo de finalización:", choice?.finish_reason || "no informado");
+    console.error("Tokens de salida:", response.usage?.completion_tokens ?? "no informados");
+    console.error("La clave API no se muestra.");
     process.exit(2);
   }
 
