@@ -42,7 +42,7 @@ const claude = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const groq = GROQ_API_KEY
   ? new OpenAI({ apiKey: GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" })
   : null;
-const numeroPersonal = String(PERSONAL_WHATSAPP_NUMBER || "").replace(/\\D/g, "");
+const numeroPersonal = String(PERSONAL_WHATSAPP_NUMBER || "").replace(/\D/g, "");
 
 // Memoria corta de cada conversacion (se borra si el servidor se reinicia)
 const MAX_HISTORIAL = 10;
@@ -118,7 +118,7 @@ async function procesar(m) {
   }
 
   // Solo el número personal configurado usa Groq; los clientes siguen usando Claude.
-  const numeroNormalizado = String(numero || "").replace(/\\D/g, "");
+  const numeroNormalizado = String(numero || "").replace(/\D/g, "");
   if (numeroPersonal && numeroNormalizado === numeroPersonal) {
     await procesarAsistentePersonal(numero, m.text.body);
     return;
