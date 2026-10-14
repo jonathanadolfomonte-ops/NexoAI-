@@ -1,0 +1,33 @@
+name: Prueba aislada de Groq
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probar-groq:
+    name: Verificar conexión con Groq
+    runs-on: ubuntu-latest
+    environment: groq-test
+    timeout-minutes: 5
+    steps:
+      - name: Descargar el código de esta rama
+        uses: actions/checkout@v4
+        with:
+          ref: asistente-personal-groq-seguro
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Probar la API de Groq
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: ${{ vars.GROQ_MODEL }}
+        run: node test-groq.js
