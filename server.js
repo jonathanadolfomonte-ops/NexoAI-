@@ -14,6 +14,8 @@ const {
   WHATSAPP_API_VERSION = "v21.0",
   // Numero del dueño que recibe el aviso de cada pedido confirmado (formato 549 + area + numero, sin + ni 15)
   OWNER_WHATSAPP_NUMBER,
+  // Horas que el bot se queda callado con un cliente cuando el dueño le responde desde la app (coexistencia)
+  PAUSA_HORAS = "8",
 } = process.env;
 
 const requeridas = [
@@ -39,6 +41,12 @@ const claude = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const MAX_HISTORIAL = 10;
 const historiales = new Map();
 const vistos = new Set();
+
+// Conversaciones en pausa: numero del cliente -> momento (ms) hasta el que el bot no contesta
+const pausados = new Map();
+const PAUSA_MS = (Number(PAUSA_HORAS) > 0 ? Number(PAUSA_HORAS) : 8) * 60 * 60 * 1000;
+// Ids de los mensajes que mando el propio bot, para no confundirlos con los del dueño
+const enviadosPorBot = new Set();
 
 const app = express();
 app.use(
@@ -84,14 +92,20 @@ app.post("/webhook", (req, res) => {
   }
   res.sendStatus(200); // responder rapido; Meta reintenta si tarda
 
-  const mensajes = (req.body.entry || [])
-    .flatMap((e) => e.changes || [])
-    .flatMap((c) => c.value?.messages || []);
+  const cambios = (req.body.entry || []).flatMap((e) => e.changes || []);
+
+  const mensajes = cambios.flatMap((c) => c.value?.messages || []);
+  // Mensajes que el dueño escribe desde la app de WhatsApp Business (coexistencia)
+  const ecos = cambios
+    .filter((c) => c.field === "smb_message_echoes")
+    .flatMap((c) => c.value?.message_echoes || []);
 
   console.log("Mensajes recibidos:", mensajes.length);
   for (const m of mensajes) {
     procesar(m).catch((err) => console.error("Error procesando mensaje:", err));
   }
+  if (ecos.length) console.log("Mensajes enviados desde la app:", ecos.length);
+  for (const eco of ecos) manejarEco(eco);
 });
 
 async function procesar(m) {
@@ -100,6 +114,12 @@ async function procesar(m) {
   if (vistos.size > 1000) vistos.clear();
 
   const numero = m.from;
+
+  // Si el dueño le respondio a este cliente desde la app, el bot se queda callado un rato
+  if (estaPausado(numero)) {
+    console.log(`Conversacion con ${numero} en pausa (respondio una persona): el bot no contesta`);
+    return;
+  }
 
   if (m.type !== "text") {
     await enviar(numero, "Por ahora solo puedo leer mensajes de texto. ¿Me escribís tu consulta?");
@@ -150,6 +170,33 @@ async function procesar(m) {
   historiales.set(numero, historial);
 
   await enviar(numero, respuesta);
+}
+
+function pausarConversacion(cliente) {
+  pausados.set(cliente, Date.now() + PAUSA_MS);
+  console.log(`Respondio una persona desde la app: bot en pausa con ${cliente} por ${PAUSA_MS / 3600000} h`);
+}
+
+function estaPausado(cliente) {
+  const hasta = pausados.get(cliente);
+  if (!hasta) return false;
+  if (Date.now() > hasta) {
+    pausados.delete(cliente);
+    return false;
+  }
+  return true;
+}
+
+// Meta avisa con "smb_message_echoes" cada mensaje que sale desde la app de WhatsApp Business.
+// El campo "to" es el numero del cliente.
+function manejarEco(eco) {
+  const cliente = eco?.to;
+  if (!cliente) return;
+  // Se espera un momento: si fue un mensaje del propio bot, su id ya quedo registrado y se ignora
+  setTimeout(() => {
+    if (eco.id && enviadosPorBot.has(eco.id)) return;
+    pausarConversacion(cliente);
+  }, 3000);
 }
 
 // El modelo agrega lineas internas al final de su respuesta: [[PEDIDO]] ... o [[DERIVAR]] ...
@@ -238,6 +285,12 @@ async function enviar(numero, texto) {
   for (const destino of variantesNumero(numero)) {
     const r = await enviarA(destino, texto);
     if (r.ok) {
+      const datos = await r.json().catch(() => null);
+      const idEnviado = datos?.messages?.[0]?.id;
+      if (idEnviado) {
+        enviadosPorBot.add(idEnviado);
+        if (enviadosPorBot.size > 2000) enviadosPorBot.clear();
+      }
       console.log(`Mensaje enviado a ${destino}${destino !== numero ? ` (formato alternativo; Meta lo recibio como ${numero})` : ""}`);
       return;
     }
