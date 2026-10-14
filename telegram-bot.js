@@ -10,6 +10,7 @@
  *   GROQ_MODEL (por defecto openai/gpt-oss-20b)
  */
 import OpenAI from "openai";
+import express from "express";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const apiKey = process.env.GROQ_API_KEY;
@@ -92,8 +93,7 @@ async function handleUpdate(update) {
   const text = message.text.trim();
   // Nunca registrar mensajes, tokens ni contenido privado.
   if (!allowedChatId) {
-    console.log("Falta TELEGRAM_ALLOWED_CHAT_ID. Chat privado detectado; ID:", chatId);
-    await sendMessage(chatId, "¡Hola! El bot ya está creado, pero falta terminar su configuración privada. Enseguida seguimos.");
+    console.log("Falta TELEGRAM_ALLOWED_CHAT_ID. Se detectó un chat privado; configurá el ID autorizado en Render.");
     return;
   }
   if (chatId !== String(allowedChatId).trim()) {
@@ -120,6 +120,12 @@ async function handleUpdate(update) {
     await sendMessage(chatId, "Tuve un problema momentáneo al responder. Probá de nuevo en un ratito.");
   }
 }
+
+const app = express();
+app.get("/", (_req, res) => res.status(200).send("NexoAI Telegram personal está activo."));
+app.get("/health", (_req, res) => res.status(200).json({ status: "ok" }));
+const port = Number(process.env.PORT || 3000);
+app.listen(port, "0.0.0.0", () => console.log("Health server listo en puerto", port));
 
 let offset = 0;
 console.log("NexoAI Telegram personal iniciado. Modelo:", model);
