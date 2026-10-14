@@ -52,7 +52,7 @@ async function telegram(method, body = {}) {
 
 async function sendMessage(chatId, text) {
   // Telegram limita los mensajes a 4096 caracteres; dividir con margen.
-  const chunks = text.match(/[\\s\\S]{1,3900}/g) || ["No pude generar una respuesta."];
+  const chunks = text.match(/[\s\S]{1,3900}/g) || ["No pude generar una respuesta."];
   for (const chunk of chunks) {
     await telegram("sendMessage", { chat_id: chatId, text: chunk });
   }
