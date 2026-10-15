@@ -59,6 +59,16 @@ app.use(
 
 app.get("/", (_req, res) => res.send("NexoAI WhatsApp activo"));
 
+// Paginas publicas que Meta exige para publicar la app
+const paginasPublicas = {
+  "/privacidad": "privacidad.html",
+  "/eliminacion-datos": "eliminacion-datos.html",
+};
+for (const [ruta, archivo] of Object.entries(paginasPublicas)) {
+  const html = fs.readFileSync(new URL(`./${archivo}`, import.meta.url), "utf-8");
+  app.get(ruta, (_req, res) => res.type("html").send(html));
+}
+
 // Meta llama a esta ruta una vez para verificar el webhook
 app.get("/webhook", (req, res) => {
   const modo = req.query["hub.mode"];
