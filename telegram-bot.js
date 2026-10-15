@@ -126,6 +126,7 @@ async function handleUpdate(update) {
 
   const chatId = String(message.chat.id);
   const text = message.text.trim();
+  console.log("Mensaje privado recibido; longitud:", text.length);
   if (!allowedChatId) {
     console.log("Falta TELEGRAM_ALLOWED_CHAT_ID. Configurá el ID autorizado en Render.");
     return;
@@ -202,6 +203,7 @@ async function handleUpdate(update) {
     await telegram("sendChatAction", { chat_id: chatId, action: "typing" });
     const answer = await answerWithGroq(chatId, text);
     await sendMessage(chatId, answer);
+    console.log("Respuesta enviada correctamente a Telegram.");
   } catch (error) {
     console.error("Error procesando mensaje:", error?.message || "error desconocido");
     await sendMessage(chatId, "Tuve un problema momentáneo al responder. Probá de nuevo en un ratito.");
