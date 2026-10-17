@@ -16,6 +16,9 @@ const {
   OWNER_WHATSAPP_NUMBER,
   // Horas que el bot se queda callado con un cliente cuando el dueño le responde desde la app (coexistencia)
   PAUSA_HORAS = "8",
+  // Planilla de Google donde se registran las conversaciones (Apps Script). Opcional.
+  WEBHOOK_PLANILLA_URL,
+  PLANILLA_CLAVE,
 } = process.env;
 
 const requeridas = [
@@ -58,6 +61,57 @@ app.use(
 );
 
 app.get("/", (_req, res) => res.send("NexoAI WhatsApp activo"));
+
+// ---- Registro en planilla (inicio)
+// Guarda cada conversacion en una planilla de Google (via Apps Script).
+// Si no estan cargadas WEBHOOK_PLANILLA_URL y PLANILLA_CLAVE, no hace nada.
+const nombresPorNumero = new Map();
+
+function textoDe(m) {
+  return m.type === "text" ? m.text?.body || "" : `[${m.type}]`;
+}
+
+function fechaArgentina() {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/Argentina/Buenos_Aires",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date())
+      .map((x) => [x.type, x.value])
+  );
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+}
+
+async function registrarEnPlanilla({ numero, texto, respuesta, estado }) {
+  if (!WEBHOOK_PLANILLA_URL || !PLANILLA_CLAVE) return;
+  try {
+    const r = await fetch(WEBHOOK_PLANILLA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      redirect: "follow",
+      body: JSON.stringify({
+        clave: PLANILLA_CLAVE,
+        fecha: fechaArgentina(),
+        numero,
+        nombre: nombresPorNumero.get(numero) || "",
+        texto,
+        respuesta,
+        estado,
+      }),
+    });
+    if (!r.ok) console.error("Planilla: respuesta inesperada", r.status);
+  } catch (err) {
+    console.error("Error guardando en la planilla:", err);
+  }
+}
+// ---- Registro en planilla (fin)
 
 // Paginas publicas que Meta exige para publicar la app
 const paginasPublicas = {
@@ -104,6 +158,14 @@ app.post("/webhook", (req, res) => {
 
   const cambios = (req.body.entry || []).flatMap((e) => e.changes || []);
 
+  // Nombre de perfil de cada cliente (para el registro de conversaciones)
+  if (nombresPorNumero.size > 1000) nombresPorNumero.clear();
+  for (const c of cambios) {
+    for (const k of c.value?.contacts || []) {
+      if (k.wa_id && k.profile?.name) nombresPorNumero.set(k.wa_id, k.profile.name);
+    }
+  }
+
   const mensajes = cambios.flatMap((c) => c.value?.messages || []);
   // Mensajes que el dueño escribe desde la app de WhatsApp Business (coexistencia)
   const ecos = cambios
@@ -128,11 +190,14 @@ async function procesar(m) {
   // Si el dueño le respondio a este cliente desde la app, el bot se queda callado un rato
   if (estaPausado(numero)) {
     console.log(`Conversacion con ${numero} en pausa (respondio una persona): el bot no contesta`);
+    registrarEnPlanilla({ numero, texto: textoDe(m), respuesta: "", estado: "Bot en pausa (respondió una persona)" });
     return;
   }
 
   if (m.type !== "text") {
-    await enviar(numero, "Por ahora solo puedo leer mensajes de texto. ¿Me escribís tu consulta?");
+    const avisoTexto = "Por ahora solo puedo leer mensajes de texto. ¿Me escribís tu consulta?";
+    registrarEnPlanilla({ numero, texto: textoDe(m), respuesta: avisoTexto, estado: "Mensaje que no es texto" });
+    await enviar(numero, avisoTexto);
     return;
   }
 
@@ -156,6 +221,7 @@ async function procesar(m) {
     historial.pop();
     historiales.set(numero, historial);
     console.error("Error con Claude:", err);
+    registrarEnPlanilla({ numero, texto: textoDe(m), respuesta: "(error técnico: se envió una disculpa)", estado: "Error con Claude" });
     await enviar(numero, "Disculpá, tuve un problema técnico. ¿Podés escribirme de nuevo en un rato?");
     return;
   }
@@ -178,6 +244,13 @@ async function procesar(m) {
     historial.shift();
   }
   historiales.set(numero, historial);
+
+  registrarEnPlanilla({
+    numero,
+    texto: textoDe(m),
+    respuesta,
+    estado: pedido ? `Pedido confirmado: ${pedido}` : derivar ? `Derivado a una persona: ${derivar}` : "Respondido",
+  });
 
   await enviar(numero, respuesta);
 }
