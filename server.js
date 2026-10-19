@@ -2,6 +2,7 @@ import express from "express";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
 const {
   PORT = 3000,
@@ -10,6 +11,9 @@ const {
   WHATSAPP_VERIFY_TOKEN,
   META_APP_SECRET,
   ANTHROPIC_API_KEY,
+  GROQ_API_KEY,
+  GROQ_MODEL = "openai/gpt-oss-20b",
+  PERSONAL_WHATSAPP_NUMBER,
   CLAUDE_MODEL = "claude-sonnet-5-5",
   WHATSAPP_API_VERSION = "v21.0",
   // Numero del dueño que recibe el aviso de cada pedido confirmado (formato 549 + area + numero, sin + ni 15)
@@ -39,10 +43,16 @@ const instrucciones = fs.readFileSync(
   "utf-8"
 );
 const claude = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+// Groq queda opcional y solo se usa para mensajes del número personal autorizado.
+const groq = GROQ_API_KEY
+  ? new OpenAI({ apiKey: GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" })
+  : null;
+const numeroPersonal = String(PERSONAL_WHATSAPP_NUMBER || "").replace(/\\D/g, "");
 
 // Memoria corta de cada conversacion (se borra si el servidor se reinicia)
 const MAX_HISTORIAL = 10;
 const historiales = new Map();
+const historialesPersonal = new Map();
 const vistos = new Set();
 
 // Conversaciones en pausa: numero del cliente -> momento (ms) hasta el que el bot no contesta
@@ -180,6 +190,44 @@ app.post("/webhook", (req, res) => {
   for (const eco of ecos) manejarEco(eco);
 });
 
+// Asistente personal separado. Si Groq falla, nunca se deriva la consulta a Claude.
+async function procesarAsistentePersonal(numero, texto) {
+  if (!groq) {
+    await enviar(numero, "El asistente personal todavía no está activado. Falta configurar GROQ_API_KEY. La atención habitual de NexoAI permanece separada.");
+    return;
+  }
+
+  const historial = historialesPersonal.get(numero) || [];
+  historial.push({ role: "user", content: texto });
+
+  try {
+    const r = await groq.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "Sos Lindsy, un asistente personal útil, cálido, claro y directo que conversa en español rioplatense. Ayudá al propietario con consultas, ideas y proyectos. Respondé con sinceridad y de forma práctica, con pasos concretos. No afirmes ser una persona ni tener acceso directo a recursos externos. No pidas ni reveles claves o datos sensibles. Si una acción fuera del chat no fue ejecutada realmente, decilo con claridad. Preferí respuestas breves y accionables.",
+        },
+        ...historial,
+      ],
+      max_tokens: 600,
+    });
+
+    const respuesta = String(r.choices?.[0]?.message?.content || "").trim() ||
+      "No pude preparar una respuesta. ¿Podés volver a escribirme?";
+    historial.push({ role: "assistant", content: respuesta });
+    while (historial.length > MAX_HISTORIAL) historial.shift();
+    if (historial[0]?.role === "assistant") historial.shift();
+    historialesPersonal.set(numero, historial);
+    await enviar(numero, respuesta);
+  } catch (err) {
+    console.error("Error con Groq para asistencia personal:", err);
+    historial.pop();
+    historialesPersonal.set(numero, historial);
+    await enviar(numero, "Tu asistente personal tuvo un problema técnico. Probá de nuevo más tarde; la atención comercial de NexoAI sigue por su flujo habitual.");
+  }
+}
+
 async function procesar(m) {
   if (vistos.has(m.id)) return;
   vistos.add(m.id);
@@ -198,6 +246,13 @@ async function procesar(m) {
     const avisoTexto = "Por ahora solo puedo leer mensajes de texto. ¿Me escribís tu consulta?";
     registrarEnPlanilla({ numero, texto: textoDe(m), respuesta: avisoTexto, estado: "Mensaje que no es texto" });
     await enviar(numero, avisoTexto);
+    return;
+  }
+
+  // Solo el número personal configurado usa Groq; los demás conservan todo el flujo comercial.
+  const numeroNormalizado = String(numero || "").replace(/\\D/g, "");
+  if (numeroPersonal && numeroNormalizado === numeroPersonal) {
+    await procesarAsistentePersonal(numero, m.text.body);
     return;
   }
 
