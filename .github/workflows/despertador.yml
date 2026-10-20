@@ -1,0 +1,16 @@
+# Mantiene despierto el bot en Render (plan Free) durante el horario del local.
+# Horario en UTC: 10:00 a 02:59 UTC = 7:00 a 23:59 en Argentina (UTC-3).
+# Para pausarlo: desactivar el workflow en la pestaña Actions de GitHub.
+name: Despertador
+
+on:
+  schedule:
+    - cron: "*/10 0-2,10-23 * * *"
+  workflow_dispatch:
+
+jobs:
+  visita:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Visitar el bot
+        run: curl -sS --max-time 90 --retry 2 -o /dev/null -w "Respuesta HTTP %{http_code}\n" https://nexoai-whatsapp.onrender.com/ || true
