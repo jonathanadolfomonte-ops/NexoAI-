@@ -1,5 +1,5 @@
 // Lógica pura aislada para pruebas. Este módulo NO está conectado a server.js.
- // Integrarlo al servidor requiere una revisión y autorización separadas.
+// Integrarlo al servidor requiere una revisión y autorización separadas.
 export function normalizePhone(value) {
   return String(value ?? "").replace(/\D/g, "");
 }
@@ -18,7 +18,7 @@ export function appendTurn(history, userText, assistantText, maxPairs = 5) {
     next.push({ role: "assistant", content: String(assistantText) });
   }
 
-  const safeMaxPairs = Math.max(1, Math.floor(Number(maxPairs) || 1);
+  const safeMaxPairs = Math.max(1, Math.floor(Number(maxPairs) || 1));
   while (next.length > safeMaxPairs * 2) next.shift();
   if (next[0]?.role === "assistant") next.shift();
   return next;
@@ -45,7 +45,10 @@ const queues = new Map();
 export function serializeByKey(key, operation) {
   const previous = queues.get(key) || Promise.resolve();
   const current = previous.catch(() => {}).then(operation);
-  const tail = current.finally(() => {
+  const tail = current.then(
+    () => undefined,
+    () => undefined
+  ).finally(() => {
     if (queues.get(key) === tail) queues.delete(key);
   });
   queues.set(key, tail);
