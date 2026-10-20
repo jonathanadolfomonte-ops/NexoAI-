@@ -2,6 +2,15 @@ import express from "express";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  SALUDO,
+  MENU,
+  MENU_REPETIDO,
+  NOMBRES,
+  detectarNegocio,
+  esComandoMenu,
+  directiva,
+} from "./menu.js";
 
 const {
   PORT = 3000,
@@ -44,6 +53,11 @@ const claude = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const MAX_HISTORIAL = 10;
 const historiales = new Map();
 const vistos = new Set();
+
+// Menu inicial: numero del cliente -> { negocio: "florencia" | "mayra" | null, esperando, ultimo }
+// Pasadas ESTADO_HORAS sin escribir, vuelve a salir el saludo con el menu.
+const estados = new Map();
+const ESTADO_MS = 12 * 60 * 60 * 1000;
 
 // Conversaciones en pausa: numero del cliente -> momento (ms) hasta el que el bot no contesta
 const pausados = new Map();
@@ -201,15 +215,54 @@ async function procesar(m) {
     return;
   }
 
+  // ---- Menu inicial: saludo + opciones, y despues el bot sigue con el negocio elegido
+  let estado = estados.get(numero);
+  if (estado && Date.now() - estado.ultimo > ESTADO_MS) {
+    estados.delete(numero);
+    historiales.delete(numero);
+    estado = undefined;
+  }
+  const esNuevo = !estado;
+  if (!estado) {
+    if (estados.size > 2000) estados.clear();
+    estado = { negocio: null, esperando: false, ultimo: Date.now() };
+    estados.set(numero, estado);
+  }
+  estado.ultimo = Date.now();
+
+  let textoParaClaude = m.text.body;
+
+  if (estado.negocio && esComandoMenu(m.text.body)) {
+    estado.negocio = null;
+    estado.esperando = true;
+    historiales.delete(numero);
+    await mostrarMenu(numero, m, [MENU]);
+    return;
+  }
+
+  if (!estado.negocio) {
+    const { negocio, soloOpcion } = detectarNegocio(m.text.body, estado.esperando);
+    if (!negocio) {
+      estado.esperando = true;
+      await mostrarMenu(numero, m, esNuevo ? [SALUDO, MENU] : [MENU_REPETIDO]);
+      return;
+    }
+    estado.negocio = negocio;
+    estado.esperando = false;
+    // Si solo escribio "1" o "2", el bot recibe una frase clara en vez del numero
+    if (soloOpcion) textoParaClaude = `Quiero consultar por ${NOMBRES[negocio]}.`;
+  }
+  // ---- Fin del menu inicial
+
   const historial = historiales.get(numero) || [];
-  historial.push({ role: "user", content: m.text.body });
+  historial.push({ role: "user", content: textoParaClaude });
 
   let respuesta;
   try {
     const r = await claude.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 500,
-      system: instrucciones,
+      system: instrucciones + directiva(estado.negocio),
       messages: historial,
     });
     respuesta = r.content
@@ -253,6 +306,19 @@ async function procesar(m) {
   });
 
   await enviar(numero, respuesta);
+}
+
+// Manda uno o mas mensajes seguidos (por ejemplo, el saludo y despues las opciones)
+async function mostrarMenu(numero, m, mensajes) {
+  registrarEnPlanilla({
+    numero,
+    texto: textoDe(m),
+    respuesta: mensajes.join("\n\n"),
+    estado: "Menú de opciones",
+  });
+  for (const texto of mensajes) {
+    await enviar(numero, texto);
+  }
 }
 
 function pausarConversacion(cliente) {
