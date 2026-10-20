@@ -16,5 +16,8 @@ test("devuelve texto vacío ante una respuesta incompleta", () => {
 });
 
 test("no convierte contenido no textual en una respuesta", () => {
-  assert.equal(extractGroqText({ choices: [{ message: { content: { text: "hola" } }] }), "");
+  assert.equal(
+    extractGroqText({ choices: [{ message: { content: { text: "hola" } } }] }),
+    ""
+  );
 });
