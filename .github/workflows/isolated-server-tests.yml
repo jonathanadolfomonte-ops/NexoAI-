@@ -1,0 +1,35 @@
+name: Pruebas aisladas del servidor
+
+on:
+  push:
+    branches:
+      - asistente-personal-groq-base-segura
+    paths:
+      - "server.js"
+      - "package.json"
+      - "tests/**"
+      - "src/**"
+      - "instrucciones-negocio.md"
+      - "privacidad.html"
+      - "eliminacion-datos.html"
+      - ".github/workflows/isolated-server-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Obtener el código de la rama de pruebas
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Instalar dependencias sin modificar archivos de bloqueo
+        run: npm install --no-package-lock
+      - name: Ejecutar las pruebas unitarias y del servidor aislado
+        run: npm test
