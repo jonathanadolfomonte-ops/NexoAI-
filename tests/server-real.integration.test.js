@@ -169,7 +169,7 @@ test("servidor real aislado: mensaje personal llama solo a Groq y el envío qued
   const entries = await waitForLog(logFile, (entry) => entry.kind === "whatsapp");
   assert.equal(entries.filter((entry) => entry.kind === "groq").length, 1);
   assert.equal(entries.filter((entry) => entry.kind === "claude").length, 0);
-  assert.equal(entries.length, 1);
+  assert.equal(entries.filter((entry) => entry.kind === "whatsapp").length, 1);
   assert.equal(entries[0].body.to, PERSONAL_NUMBER);
   assert.equal(entries[0].body.text.body, "RESPUESTA_GROQ_SIMULADA");
   assert.equal(entries.some((entry) => entry.kind === "BLOCKED_UNEXPECTED_URL"), false);
@@ -184,7 +184,7 @@ test("servidor real aislado: otro remitente llama solo a Claude y conserva el fl
   const entries = await waitForLog(logFile, (entry) => entry.kind === "whatsapp");
   assert.equal(entries.filter((entry) => entry.kind === "claude").length, 1);
   assert.equal(entries.filter((entry) => entry.kind === "groq").length, 0);
-  assert.equal(entries.length, 1);
+  assert.equal(entries.filter((entry) => entry.kind === "whatsapp").length, 1);
   assert.equal(entries[0].body.to, COMMERCIAL_NUMBER);
   assert.equal(entries[0].body.text.body, "RESPUESTA_CLAUDE_SIMULADA");
 });
