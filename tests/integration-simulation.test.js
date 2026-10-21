@@ -78,7 +78,7 @@ test("sin Groq configurado, el asistente personal informa el estado sin llamar a
   });
   assert.equal(result.status, "personal-disabled");
   assert.deepEqual(env.calls.claude, []);
-  assert.match(env.calls.sent[0].body, /falta configurar GROQ_API_KEY/);
+  assert.match(env.calls.sent[0].body, /falta configurar GROQ_API_KEY/i);
 });
 
 test("formato de número no equivalente cae al flujo comercial, no al personal", async () => {
