@@ -37,7 +37,7 @@ async function waitForLog(file, predicate, expectedCount = 1, timeoutMs = 3000) 
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
     const matching = readLog(file).filter(predicate);
-    if (matching.length >= expectedCount) return matching;
+    if (matching.length >= expectedCount) return readLog(file);
     await delay(25);
   }
   throw new Error("No se observó la salida simulada esperada. Registro: " + JSON.stringify(readLog(file)));
