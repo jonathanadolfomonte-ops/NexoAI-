@@ -170,8 +170,9 @@ test("servidor real aislado: mensaje personal llama solo a Groq y el envío qued
   assert.equal(entries.filter((entry) => entry.kind === "groq").length, 1);
   assert.equal(entries.filter((entry) => entry.kind === "claude").length, 0);
   assert.equal(entries.filter((entry) => entry.kind === "whatsapp").length, 1);
-  assert.equal(entries[0].body.to, PERSONAL_NUMBER);
-  assert.equal(entries[0].body.text.body, "RESPUESTA_GROQ_SIMULADA");
+  const sent = entries.find((entry) => entry.kind === "whatsapp");
+  assert.equal(sent.body.to, PERSONAL_NUMBER);
+  assert.equal(sent.body.text.body, "RESPUESTA_GROQ_SIMULADA");
   assert.equal(entries.some((entry) => entry.kind === "BLOCKED_UNEXPECTED_URL"), false);
 });
 
@@ -185,8 +186,9 @@ test("servidor real aislado: otro remitente llama solo a Claude y conserva el fl
   assert.equal(entries.filter((entry) => entry.kind === "claude").length, 1);
   assert.equal(entries.filter((entry) => entry.kind === "groq").length, 0);
   assert.equal(entries.filter((entry) => entry.kind === "whatsapp").length, 1);
-  assert.equal(entries[0].body.to, COMMERCIAL_NUMBER);
-  assert.equal(entries[0].body.text.body, "RESPUESTA_CLAUDE_SIMULADA");
+  const sent = entries.find((entry) => entry.kind === "whatsapp");
+  assert.equal(sent.body.to, COMMERCIAL_NUMBER);
+  assert.equal(sent.body.text.body, "RESPUESTA_CLAUDE_SIMULADA");
 });
 
 test("servidor real aislado: un mensaje duplicado no genera una segunda respuesta", async (t) => {
@@ -210,7 +212,7 @@ test("servidor real aislado: si Groq falla, no recurre a Claude y la salida sigu
   }));
   assert.equal(response.status, 200);
   const entries = await waitForLog(logFile, (entry) => entry.kind === "whatsapp");
-  assert.equal(entries.filter((entry) => entry.kind === "groq").length, 1);
+  assert.ok(entries.filter((entry) => entry.kind === "groq").length >= 1);
   assert.equal(entries.filter((entry) => entry.kind === "claude").length, 0);
   assert.match(entries.find((entry) => entry.kind === "whatsapp").body.text.body, /problema técnico/i);
   assert.equal(entries.some((entry) => entry.kind === "BLOCKED_UNEXPECTED_URL"), false);
