@@ -2,23 +2,15 @@
 // No se importa desde server.js y nunca realiza solicitudes de red.
 import { routeMessage } from "../logic/nexoai-core.js";
 
-export async function simulateIncomingMessage({
-  sender,
-  text,
-  personalNumber,
-  groq,
-  claude,
-  send,
-}) {
+export async function simulateIncomingMessage({ sender, text, personalNumber, groq, claude, send }) {
   const route = routeMessage(sender, personalNumber);
-
   if (route === "personal") {
     if (!groq) {
       await send(sender, "El asistente personal todavía no está activado. Falta configurar GROQ_API_KEY. La atención habitual de NexoAI permanece separada.");
       return { route, provider: null, status: "personal-disabled" };
     }
     try {
-      const response = await groq.respond(text);
+      const response = String((await groq.respond(text)) ?? "").trim();
       await send(sender, response || "No pude preparar una respuesta. ¿Podés volver a escribirme?");
       return { route, provider: "groq", status: "ok" };
     } catch {
@@ -26,9 +18,8 @@ export async function simulateIncomingMessage({
       return { route, provider: "groq", status: "provider-error" };
     }
   }
-
   try {
-    const response = await claude.respond(text);
+    const response = String((await claude.respond(text)) ?? "").trim();
     await send(sender, response || "Disculpá, no pude armar una respuesta. ¿Me lo repetís?");
     return { route, provider: "claude", status: "ok" };
   } catch {
