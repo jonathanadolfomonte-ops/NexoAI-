@@ -21,8 +21,8 @@ globalThis.fetch = async (input, init = {}) => {
     record({ kind: "groq", url, method, body });
     if (process.env.TEST_GROQ_MODE === "error") {
       return new Response(JSON.stringify({
-        error: { message: "Fallo Groq simulado", type: "server_error", code: "test_error" }
-      }), { status: 500, headers: { "content-type": "application/json" } });
+        error: { message: "Fallo Groq simulado", type: "invalid_request_error", code: "test_error" }
+      }), { status: 400, headers: { "content-type": "application/json" } });
     }
     return new Response(JSON.stringify({
       id: "chatcmpl-test", object: "chat.completion", created: 0, model: "test-model",
