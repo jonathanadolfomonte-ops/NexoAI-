@@ -64,6 +64,14 @@ async function startServer(t, options = {}) {
     TEST_CLAUDE_MODE: options.claudeMode || "ok",
     NODE_OPTIONS: "--import=" + preloadPath
   };
+  if (options.personalOnly) {
+    env.PERSONAL_ASSISTANT_ONLY = "true";
+    env.PERSONAL_WHATSAPP_PHONE_NUMBER_ID = options.personalPhoneNumberId || "PHONE_ID_PERSONAL_FICTICIO";
+    delete env.WHATSAPP_PHONE_NUMBER_ID;
+    delete env.ANTHROPIC_API_KEY;
+  } else {
+    env.PERSONAL_ASSISTANT_ONLY = "false";
+  }
   delete env.WEBHOOK_PLANILLA_URL;
   delete env.PLANILLA_CLAVE;
 
@@ -185,6 +193,31 @@ test("servidor real aislado: mensajes recibidos por el ID personal responden con
     from: customerNumber,
     id: "wamid.personal-phone-id-1",
     text: "consulta personal recibida en la línea personal",
+    phoneNumberId: personalPhoneId
+  }));
+  assert.equal(response.status, 200);
+  const entries = await waitForLog(logFile, (entry) => entry.kind === "whatsapp");
+  assert.equal(entries.filter((entry) => entry.kind === "groq").length, 1);
+  assert.equal(entries.filter((entry) => entry.kind === "claude").length, 0);
+  const sent = entries.find((entry) => entry.kind === "whatsapp");
+  assert.equal(sent.body.to, customerNumber);
+  assert.match(sent.url, new RegExp("/" + personalPhoneId + "/messages"));
+  assert.equal(sent.body.text.body, "RESPUESTA_GROQ_SIMULADA");
+  assert.equal(entries.some((entry) => entry.kind === "BLOCKED_UNEXPECTED_URL"), false);
+});
+
+test("servidor real aislado: modo personal arranca sin Claude ni ID comercial y responde solo desde el ID personal", async (t) => {
+  const personalPhoneId = "PHONE_ID_PERSONAL_SOLO_FICTICIO";
+  const customerNumber = "5493815550666";
+  const { baseUrl, logFile } = await startServer(t, { personalOnly: true, personalPhoneNumberId: personalPhoneId });
+  const root = await fetch(baseUrl + "/");
+  assert.equal(root.status, 200);
+  assert.equal(await root.text(), "NexoAI Personal activo");
+
+  const response = await postWebhook(baseUrl, payloadFor({
+    from: customerNumber,
+    id: "wamid.personal-only-1",
+    text: "consulta personal aislada",
     phoneNumberId: personalPhoneId
   }));
   assert.equal(response.status, 200);
