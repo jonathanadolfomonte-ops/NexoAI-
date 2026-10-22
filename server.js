@@ -186,6 +186,17 @@ app.post("/webhook", (req, res) => {
     .filter((c) => c.field === "smb_message_echoes")
     .flatMap((c) => c.value?.message_echoes || []);
 
+  // Meta avisa despues del envio si cada mensaje se entrego, se leyo o fallo (y por que)
+  for (const c of cambios) {
+    for (const s of c.value?.statuses || []) {
+      if (s.status === "failed") {
+        console.error(`WhatsApp NO pudo entregar a ${s.recipient_id}:`, JSON.stringify(s.errors || s));
+      } else {
+        console.log(`Entrega a ${s.recipient_id}: ${s.status}`);
+      }
+    }
+  }
+
   console.log("Mensajes recibidos:", mensajes.length);
   for (const m of mensajes) {
     procesar(m).catch((err) => console.error("Error procesando mensaje:", err));
