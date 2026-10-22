@@ -57,6 +57,7 @@ async function startServer(t, options = {}) {
     ANTHROPIC_API_KEY: "clave-anthropic-ficticia",
     GROQ_API_KEY: "clave-groq-ficticia",
     PERSONAL_WHATSAPP_NUMBER: PERSONAL_NUMBER,
+    PERSONAL_WHATSAPP_PHONE_NUMBER_ID: options.personalPhoneNumberId || "",
     OWNER_WHATSAPP_NUMBER: "",
     TEST_OUTBOUND_LOG: logFile,
     TEST_GROQ_MODE: options.groqMode || "ok",
@@ -102,7 +103,7 @@ async function startServer(t, options = {}) {
   return { baseUrl, logFile, output: () => output };
 }
 
-function payloadFor({ from, id, text = "mensaje ficticio" }) {
+function payloadFor({ from, id, text = "mensaje ficticio", phoneNumberId = "PHONE_ID_FICTICIO" }) {
   return {
     object: "whatsapp_business_account",
     entry: [{
@@ -111,7 +112,7 @@ function payloadFor({ from, id, text = "mensaje ficticio" }) {
         field: "messages",
         value: {
           messaging_product: "whatsapp",
-          metadata: { display_phone_number: "0000000000", phone_number_id: "PHONE_ID_FICTICIO" },
+          metadata: { display_phone_number: "0000000000", phone_number_id: phoneNumberId },
           contacts: [{ profile: { name: "Cliente de prueba" }, wa_id: from }],
           messages: [{
             from, id, timestamp: "1792530000", type: "text", text: { body: text }
@@ -172,6 +173,27 @@ test("servidor real aislado: mensaje personal llama solo a Groq y el envío qued
   assert.equal(entries.filter((entry) => entry.kind === "whatsapp").length, 1);
   const sent = entries.find((entry) => entry.kind === "whatsapp");
   assert.equal(sent.body.to, PERSONAL_NUMBER);
+  assert.equal(sent.body.text.body, "RESPUESTA_GROQ_SIMULADA");
+  assert.equal(entries.some((entry) => entry.kind === "BLOCKED_UNEXPECTED_URL"), false);
+});
+
+test("servidor real aislado: mensajes recibidos por el ID personal responden con Groq desde ese mismo ID", async (t) => {
+  const personalPhoneId = "PHONE_ID_PERSONAL_FICTICIO";
+  const customerNumber = "5493815550777";
+  const { baseUrl, logFile } = await startServer(t, { personalPhoneNumberId: personalPhoneId });
+  const response = await postWebhook(baseUrl, payloadFor({
+    from: customerNumber,
+    id: "wamid.personal-phone-id-1",
+    text: "consulta personal recibida en la línea personal",
+    phoneNumberId: personalPhoneId
+  }));
+  assert.equal(response.status, 200);
+  const entries = await waitForLog(logFile, (entry) => entry.kind === "whatsapp");
+  assert.equal(entries.filter((entry) => entry.kind === "groq").length, 1);
+  assert.equal(entries.filter((entry) => entry.kind === "claude").length, 0);
+  const sent = entries.find((entry) => entry.kind === "whatsapp");
+  assert.equal(sent.body.to, customerNumber);
+  assert.match(sent.url, new RegExp("/" + personalPhoneId + "/messages"));
   assert.equal(sent.body.text.body, "RESPUESTA_GROQ_SIMULADA");
   assert.equal(entries.some((entry) => entry.kind === "BLOCKED_UNEXPECTED_URL"), false);
 });
