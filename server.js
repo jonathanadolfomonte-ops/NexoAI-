@@ -14,6 +14,8 @@ const {
   GROQ_API_KEY,
   GROQ_MODEL = "openai/gpt-oss-20b",
   PERSONAL_WHATSAPP_NUMBER,
+  // ID de teléfono de Meta para el número personal habilitado mediante coexistencia.
+  PERSONAL_WHATSAPP_PHONE_NUMBER_ID,
   CLAUDE_MODEL = "claude-sonnet-5-5",
   WHATSAPP_API_VERSION = "v21.0",
   // Numero del dueño que recibe el aviso de cada pedido confirmado (formato 549 + area + numero, sin + ni 15)
@@ -176,24 +178,29 @@ app.post("/webhook", (req, res) => {
     }
   }
 
-  const mensajes = cambios.flatMap((c) => c.value?.messages || []);
+  const mensajes = cambios.flatMap((c) =>
+    (c.value?.messages || []).map((mensaje) => ({
+      mensaje,
+      phoneNumberId: c.value?.metadata?.phone_number_id,
+    }))
+  );
   // Mensajes que el dueño escribe desde la app de WhatsApp Business (coexistencia)
   const ecos = cambios
     .filter((c) => c.field === "smb_message_echoes")
     .flatMap((c) => c.value?.message_echoes || []);
 
   console.log("Mensajes recibidos:", mensajes.length);
-  for (const m of mensajes) {
-    procesar(m).catch((err) => console.error("Error procesando mensaje:", err));
+  for (const { mensaje, phoneNumberId } of mensajes) {
+    procesar(mensaje, phoneNumberId).catch((err) => console.error("Error procesando mensaje:", err));
   }
   if (ecos.length) console.log("Mensajes enviados desde la app:", ecos.length);
   for (const eco of ecos) manejarEco(eco);
 });
 
 // Asistente personal separado. Si Groq falla, nunca se deriva la consulta a Claude.
-async function procesarAsistentePersonal(numero, texto) {
+async function procesarAsistentePersonal(numero, texto, phoneNumberId = WHATSAPP_PHONE_NUMBER_ID) {
   if (!groq) {
-    await enviar(numero, "El asistente personal todavía no está activado. Falta configurar GROQ_API_KEY. La atención habitual de NexoAI permanece separada.");
+    await enviar(numero, "El asistente personal todavía no está activado. Falta configurar GROQ_API_KEY. La atención habitual de NexoAI permanece separada.", phoneNumberId);
     return;
   }
 
@@ -219,16 +226,20 @@ async function procesarAsistentePersonal(numero, texto) {
     while (historial.length > MAX_HISTORIAL) historial.shift();
     if (historial[0]?.role === "assistant") historial.shift();
     historialesPersonal.set(numero, historial);
-    await enviar(numero, respuesta);
+    await enviar(numero, respuesta, phoneNumberId);
   } catch (err) {
     console.error("Error con Groq para asistencia personal:", err);
     historial.pop();
     historialesPersonal.set(numero, historial);
-    await enviar(numero, "Tu asistente personal tuvo un problema técnico. Probá de nuevo más tarde; la atención comercial de NexoAI sigue por su flujo habitual.");
+    await enviar(numero, "Tu asistente personal tuvo un problema técnico. Probá de nuevo más tarde; la atención comercial de NexoAI sigue por su flujo habitual.", phoneNumberId);
   }
 }
 
-async function procesar(m) {
+async function procesar(m, phoneNumberId = WHATSAPP_PHONE_NUMBER_ID) {
+  if (phoneNumberId && phoneNumberId !== WHATSAPP_PHONE_NUMBER_ID && phoneNumberId !== PERSONAL_WHATSAPP_PHONE_NUMBER_ID) {
+    console.error("Mensaje ignorado: phone_number_id no configurado para esta aplicación");
+    return;
+  }
   if (vistos.has(m.id)) return;
   vistos.add(m.id);
   if (vistos.size > 1000) vistos.clear();
@@ -245,14 +256,18 @@ async function procesar(m) {
   if (m.type !== "text") {
     const avisoTexto = "Por ahora solo puedo leer mensajes de texto. ¿Me escribís tu consulta?";
     registrarEnPlanilla({ numero, texto: textoDe(m), respuesta: avisoTexto, estado: "Mensaje que no es texto" });
-    await enviar(numero, avisoTexto);
+    await enviar(numero, avisoTexto, phoneNumberId);
     return;
   }
 
-  // Solo el número personal configurado usa Groq; los demás conservan todo el flujo comercial.
+  // Si se configura el ID de Meta del número personal, se enruta por el número empresarial receptor.
+  // El modo antiguo por remitente queda como compatibilidad hasta configurar coexistencia.
   const numeroNormalizado = String(numero || "").replace(/\D/g, "");
-  if (numeroPersonal && numeroNormalizado === numeroPersonal) {
-    await procesarAsistentePersonal(numero, m.text.body);
+  const esNumeroPersonal = PERSONAL_WHATSAPP_PHONE_NUMBER_ID
+    ? phoneNumberId === PERSONAL_WHATSAPP_PHONE_NUMBER_ID
+    : Boolean(numeroPersonal && numeroNormalizado === numeroPersonal);
+  if (esNumeroPersonal) {
+    await procesarAsistentePersonal(numero, m.text.body, phoneNumberId);
     return;
   }
 
@@ -307,7 +322,7 @@ async function procesar(m) {
     estado: pedido ? `Pedido confirmado: ${pedido}` : derivar ? `Derivado a una persona: ${derivar}` : "Respondido",
   });
 
-  await enviar(numero, respuesta);
+  await enviar(numero, respuesta, phoneNumberId);
 }
 
 function pausarConversacion(cliente) {
@@ -402,8 +417,8 @@ function variantesNumero(numero) {
   return lista;
 }
 
-async function enviarA(destino, texto) {
-  const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+async function enviarA(destino, texto, phoneNumberId = WHATSAPP_PHONE_NUMBER_ID) {
+  const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`;
   return fetch(url, {
     method: "POST",
     headers: {
@@ -419,9 +434,9 @@ async function enviarA(destino, texto) {
   });
 }
 
-async function enviar(numero, texto) {
+async function enviar(numero, texto, phoneNumberId = WHATSAPP_PHONE_NUMBER_ID) {
   for (const destino of variantesNumero(numero)) {
-    const r = await enviarA(destino, texto);
+    const r = await enviarA(destino, texto, phoneNumberId);
     if (r.ok) {
       const datos = await r.json().catch(() => null);
       const idEnviado = datos?.messages?.[0]?.id;
