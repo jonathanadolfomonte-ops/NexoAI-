@@ -16,6 +16,7 @@ const {
   PERSONAL_WHATSAPP_NUMBER,
   // ID de teléfono de Meta para el número personal habilitado mediante coexistencia.
   PERSONAL_WHATSAPP_PHONE_NUMBER_ID,
+  PERSONAL_ASSISTANT_ONLY = "false",
   CLAUDE_MODEL = "claude-sonnet-5-5",
   WHATSAPP_API_VERSION = "v21.0",
   // Numero del dueño que recibe el aviso de cada pedido confirmado (formato 549 + area + numero, sin + ni 15)
@@ -27,24 +28,23 @@ const {
   PLANILLA_CLAVE,
 } = process.env;
 
-const requeridas = [
-  "WHATSAPP_TOKEN",
-  "WHATSAPP_PHONE_NUMBER_ID",
-  "WHATSAPP_VERIFY_TOKEN",
-  "META_APP_SECRET",
-  "ANTHROPIC_API_KEY",
-];
+const modoSoloPersonal = PERSONAL_ASSISTANT_ONLY === "true";
+const requeridas = modoSoloPersonal
+  ? ["WHATSAPP_TOKEN", "WHATSAPP_VERIFY_TOKEN", "META_APP_SECRET", "GROQ_API_KEY", "PERSONAL_WHATSAPP_PHONE_NUMBER_ID"]
+  : ["WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_VERIFY_TOKEN", "META_APP_SECRET", "ANTHROPIC_API_KEY"];
 const faltan = requeridas.filter((k) => !process.env[k]);
 if (faltan.length) {
   console.error("Faltan variables de entorno:", faltan.join(", "));
   process.exit(1);
 }
 
-const instrucciones = fs.readFileSync(
-  new URL("./instrucciones-negocio.md", import.meta.url),
-  "utf-8"
-);
-const claude = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+const ID_TELEFONO_PREDETERMINADO = modoSoloPersonal
+  ? PERSONAL_WHATSAPP_PHONE_NUMBER_ID
+  : WHATSAPP_PHONE_NUMBER_ID;
+const instrucciones = modoSoloPersonal
+  ? ""
+  : fs.readFileSync(new URL("./instrucciones-negocio.md", import.meta.url), "utf-8");
+const claude = modoSoloPersonal ? null : new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 // Groq queda opcional y solo se usa para mensajes del número personal autorizado.
 const groq = GROQ_API_KEY
   ? new OpenAI({ apiKey: GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" })
@@ -72,7 +72,7 @@ app.use(
   })
 );
 
-app.get("/", (_req, res) => res.send("NexoAI WhatsApp activo"));
+app.get("/", (_req, res) => res.send(modoSoloPersonal ? "NexoAI Personal activo" : "NexoAI WhatsApp activo"));
 
 // ---- Registro en planilla (inicio)
 // Guarda cada conversacion en una planilla de Google (via Apps Script).
@@ -198,7 +198,7 @@ app.post("/webhook", (req, res) => {
 });
 
 // Asistente personal separado. Si Groq falla, nunca se deriva la consulta a Claude.
-async function procesarAsistentePersonal(numero, texto, phoneNumberId = WHATSAPP_PHONE_NUMBER_ID) {
+async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
   if (!groq) {
     await enviar(numero, "El asistente personal todavía no está activado. Falta configurar GROQ_API_KEY. La atención habitual de NexoAI permanece separada.", phoneNumberId);
     return;
@@ -235,9 +235,13 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = WHATSAPP
   }
 }
 
-async function procesar(m, phoneNumberId = WHATSAPP_PHONE_NUMBER_ID) {
+async function procesar(m, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
   if (phoneNumberId && phoneNumberId !== WHATSAPP_PHONE_NUMBER_ID && phoneNumberId !== PERSONAL_WHATSAPP_PHONE_NUMBER_ID) {
     console.error("Mensaje ignorado: phone_number_id no configurado para esta aplicación");
+    return;
+  }
+  if (modoSoloPersonal && phoneNumberId !== PERSONAL_WHATSAPP_PHONE_NUMBER_ID) {
+    console.error("Mensaje ignorado: el modo solo personal exige el ID de teléfono personal configurado");
     return;
   }
   if (vistos.has(m.id)) return;
@@ -417,7 +421,7 @@ function variantesNumero(numero) {
   return lista;
 }
 
-async function enviarA(destino, texto, phoneNumberId = WHATSAPP_PHONE_NUMBER_ID) {
+async function enviarA(destino, texto, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
   const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`;
   return fetch(url, {
     method: "POST",
@@ -434,7 +438,7 @@ async function enviarA(destino, texto, phoneNumberId = WHATSAPP_PHONE_NUMBER_ID)
   });
 }
 
-async function enviar(numero, texto, phoneNumberId = WHATSAPP_PHONE_NUMBER_ID) {
+async function enviar(numero, texto, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
   for (const destino of variantesNumero(numero)) {
     const r = await enviarA(destino, texto, phoneNumberId);
     if (r.ok) {
