@@ -1,6 +1,8 @@
 import express from "express";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   SALUDO,
@@ -28,6 +30,8 @@ const {
   // Planilla de Google donde se registran las conversaciones (Apps Script). Opcional.
   WEBHOOK_PLANILLA_URL,
   PLANILLA_CLAVE,
+  // Direccion publica del servicio: de ahi WhatsApp baja las fotos de las prendas
+  PUBLIC_BASE_URL = "https://nexoai-whatsapp.onrender.com",
 } = process.env;
 
 const requeridas = [
@@ -48,6 +52,21 @@ const instrucciones = fs.readFileSync(
   "utf-8"
 );
 const claude = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+
+// Fotos de las prendas (carpeta fotos/): el modelo pide una con la marca [[FOTO]] clave
+const carpetaFotos = fileURLToPath(new URL("./fotos/", import.meta.url));
+let fotosDisponibles = new Set();
+try {
+  fotosDisponibles = new Set(
+    fs
+      .readdirSync(carpetaFotos)
+      .filter((f) => f.endsWith(".jpg"))
+      .map((f) => path.basename(f, ".jpg"))
+  );
+} catch {
+  console.log("No hay carpeta de fotos: el bot responde solo con texto");
+}
+const MAX_FOTOS = 3;
 
 // Memoria corta de cada conversacion (se borra si el servidor se reinicia)
 const MAX_HISTORIAL = 10;
@@ -75,6 +94,7 @@ app.use(
 );
 
 app.get("/", (_req, res) => res.send("NexoAI WhatsApp activo"));
+app.use("/fotos", express.static(carpetaFotos, { maxAge: "7d" }));
 
 // ---- Registro en planilla (inicio)
 // Guarda cada conversacion en una planilla de Google (via Apps Script).
@@ -292,7 +312,7 @@ async function procesar(m) {
 
   // Si el cliente confirmo un pedido, el modelo agrega una linea "[[PEDIDO]] resumen".
   // Se la saca del mensaje al cliente y se le avisa al dueño.
-  const { texto, pedido, derivar } = separarMarcas(respuesta);
+  const { texto, pedido, derivar, fotos } = separarMarcas(respuesta);
   respuesta = texto;
   if (pedido) {
     avisarPedido(numero, pedido).catch((err) => console.error("Error avisando el pedido:", err));
@@ -317,6 +337,9 @@ async function procesar(m) {
   });
 
   await enviar(numero, respuesta);
+  for (const clave of fotos) {
+    await enviarFoto(numero, clave);
+  }
 }
 
 // Manda uno o mas mensajes seguidos (por ejemplo, el saludo y despues las opciones)
@@ -363,6 +386,7 @@ function manejarEco(eco) {
 // Se las saca siempre del mensaje al cliente (incluso si vienen mal escritas o en medio del texto).
 const MARCA_PEDIDO = /\[\[PEDIDO\]\][ \t]*([^\n]*)/i;
 const MARCA_DERIVAR = /\[\[DERIVAR\]\][ \t]*([^\n]*)/i;
+const MARCA_FOTO = /\[\[FOTO\]\][ \t]*([a-z0-9-]+)/gi;
 const MARCA_SUELTA = /\[\[[A-Z_]+\]\]/gi;
 
 function separarMarcas(respuesta) {
@@ -375,8 +399,15 @@ function separarMarcas(respuesta) {
   };
   const pedido = sacar(MARCA_PEDIDO);
   const derivar = sacar(MARCA_DERIVAR);
+  // Fotos pedidas: solo se aceptan las que existen en la carpeta fotos/
+  const fotos = [];
+  texto = texto.replace(MARCA_FOTO, (_m, clave) => {
+    const k = clave.toLowerCase();
+    if (fotosDisponibles.has(k) && !fotos.includes(k)) fotos.push(k);
+    return "";
+  });
   texto = texto.replace(MARCA_SUELTA, "").replace(/\n{3,}/g, "\n\n").trim();
-  return { texto, pedido, derivar };
+  return { texto, pedido, derivar, fotos: fotos.slice(0, MAX_FOTOS) };
 }
 
 // Para no avisar muchas veces por la misma conversacion
@@ -424,7 +455,7 @@ function variantesNumero(numero) {
   return lista;
 }
 
-async function enviarA(destino, texto) {
+async function enviarA(destino, contenido) {
   const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
   return fetch(url, {
     method: "POST",
@@ -435,15 +466,14 @@ async function enviarA(destino, texto) {
     body: JSON.stringify({
       messaging_product: "whatsapp",
       to: destino,
-      type: "text",
-      text: { body: texto },
+      ...contenido,
     }),
   });
 }
 
-async function enviar(numero, texto) {
+async function enviarContenido(numero, contenido) {
   for (const destino of variantesNumero(numero)) {
-    const r = await enviarA(destino, texto);
+    const r = await enviarA(destino, contenido);
     if (r.ok) {
       const datos = await r.json().catch(() => null);
       const idEnviado = datos?.messages?.[0]?.id;
@@ -458,6 +488,17 @@ async function enviar(numero, texto) {
     console.error(`Error enviando a WhatsApp (destino ${destino}):`, r.status, cuerpo);
     if (!cuerpo.includes("131030")) return; // otro error: no tiene sentido probar otros formatos
   }
+}
+
+async function enviar(numero, texto) {
+  return enviarContenido(numero, { type: "text", text: { body: texto } });
+}
+
+async function enviarFoto(numero, clave) {
+  return enviarContenido(numero, {
+    type: "image",
+    image: { link: `${PUBLIC_BASE_URL}/fotos/${clave}.jpg` },
+  });
 }
 
 app.listen(PORT, () => console.log(`NexoAI WhatsApp escuchando en el puerto ${PORT}`));
