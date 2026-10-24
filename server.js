@@ -232,12 +232,13 @@ app.post("/webhook", (req, res) => {
 // El bot redacta el mensaje en nombre del dueño y se lo manda al cliente.
 // Sin numero, va al ultimo cliente por el que se le aviso al dueño (pedido o derivacion).
 // Verbos con los que el dueño da una orden: "decile", "avisale", "escribile", "dile al número ... que ..."
-const VERBOS_ORDEN =
-  "dec[ií]le|dile|decirle|dec[ií]|avis[aá]le|avisarle|avis[aá]|transmit[ií]le|respond[eé]le|contest[aá]le|escrib[ií]le|mand[aá]le|comunic[aá]le|cont[aá]le|inform[aá]le|notific[aá]le|pas[aá]le|hac[eé]le saber";
+const VERBOS_BASE = ["decile","dile","decirle","deci","avisale","avisarle","avisa","transmitile","respondele","contestale","escribile","mandale","comunicale","contale","informale","notificale","pasale","hacele saber"];
+const aTolerante = (s) => s.replace(/[aeiou]/g, (v) => ({ a: "[aáà]", e: "[eéè]", i: "[ií]", o: "[oó]", u: "[uúü]" })[v]);
+const VERBOS_ORDEN = VERBOS_BASE.map(aTolerante).join("|");
 const COMANDO_DUENO = new RegExp(`^\\s*(?:${VERBOS_ORDEN})(?![\\p{L}\\p{N}])`, "iu");
 // "al número +549...", "al cliente 3873...", "a celular ..." aunque venga después del "que"
 const DESTINO_EXPLICITO =
-  /\b(?:al|a)\s+(?:n[uú]mero|nro\.?|celular|cel\.?|cliente|contacto)\s*[:.]?\s*(\+?\d[\d\s().-]{8,}\d)(?=\s*(?:\bque\b|:|,))/iu;
+  /\b(?:al|a)\s+(?:n[uú]mero|nro\.?|celular|cel\.?|cliente|contacto)\s*[:.]?\s*(\+?\d[\d\s().-]{8,}\d)(?=\s*(?:\b(?:que|q)\b|:|,))/iu;
 
 // Saca caracteres invisibles y signos o emojis del principio (el dictado y el teclado a veces los agregan)
 function limpiarOrden(t) {
@@ -249,7 +250,11 @@ function limpiarOrden(t) {
 
 function esOrdenDelDueno(texto) {
   const t = limpiarOrden(texto);
-  return COMANDO_DUENO.test(t) || DESTINO_EXPLICITO.test(t);
+  return (
+    COMANDO_DUENO.test(t) ||
+    DESTINO_EXPLICITO.test(t) ||
+    (/\+?\d[\d\s().-]{8,}\d/.test(t) && /\b(?:que|q)\b/i.test(t))
+  );
 }
 // WhatsApp solo deja escribir libremente dentro de las 24 h del ultimo mensaje del cliente
 const VENTANA_MS = 23 * 60 * 60 * 1000;
@@ -277,8 +282,8 @@ function limpiarInstruccion(texto, quitar) {
   t = t
     .replace(new RegExp(`^\\s*(?:${VERBOS_ORDEN})(?![\\p{L}\\p{N}])`, "iu"), " ")
     .replace(/^\s*(?:(?:al|a la|a el|a)\s+)?(?:n[uú]mero|nro\.?|celular|cel\.?|cliente|contacto)\s*[:.,]?\s*/iu, " ")
-    .replace(/^\s*(?:al|a)\s+(?=que\b)/i, " ")
-    .replace(/^\s*(?:que|:)\s+/i, " ")
+    .replace(/^\s*(?:al|a)\s+(?=(?:que|q)\b)/i, " ")
+    .replace(/^\s*(?:que|q|:)\s+/i, " ")
     .replace(/\s{2,}/g, " ")
     .replace(/\s+([,.;:])/g, "$1")
     .trim();
@@ -289,7 +294,7 @@ function limpiarInstruccion(texto, quitar) {
 // El numero puede ir antes del "que" ("Dile al 3873... que ...") o despues ("Avisale que ... al numero 3873... que ...")
 function leerOrden(textoOriginal) {
   const texto = limpiarOrden(textoOriginal);
-  const antes = texto.split(/\bque\b|:/i)[0].slice(0, 120);
+  const antes = texto.split(/\b(?:que|q)\b|:/i)[0].slice(0, 120);
   let hallado = antes.match(/\+?\d[\d\s().-]{8,}\d/);
   let quitar = hallado ? hallado[0] : null;
   if (!hallado) {
