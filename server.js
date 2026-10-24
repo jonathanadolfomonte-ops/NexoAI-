@@ -368,8 +368,15 @@ async function procesar(m) {
 
   const numero = m.from;
 
-  // Ordenes del dueño ("decile al cliente que ..."): solo desde OWNER_WHATSAPP_NUMBER
-  if (m.type === "text" && esDelDueno(numero) && COMANDO_DUENO.test(m.text.body)) {
+  // Ordenes del dueño: solo se ejecutan desde OWNER_WHATSAPP_NUMBER.
+  // El diagnóstico registra booleanos, nunca el teléfono ni el texto privado.
+  const mensajeEsTexto = m.type === "text";
+  const esDuenoConfigurado = esDelDueno(numero);
+  const pareceOrdenDelDueno = mensajeEsTexto && COMANDO_DUENO.test(m.text.body);
+  console.log(
+    `Clasificación entrante: dueño_reconocido=${esDuenoConfigurado}, parece_orden=${pareceOrdenDelDueno}`
+  );
+  if (mensajeEsTexto && esDuenoConfigurado && pareceOrdenDelDueno) {
     await manejarOrdenDelDueno(numero, m.text.body).catch((err) =>
       console.error("Error con la orden del dueño:", err)
     );
