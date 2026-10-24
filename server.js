@@ -328,7 +328,7 @@ async function redactarMensajeDelDueno(instruccion) {
       "Redactá el mensaje tal como le va a llegar al cliente, escrito en primera persona como si lo escribiera el dueño (por ejemplo: \"estoy viajando\", \"te confirmo\"), " +
       "en español rioplatense, amable y breve (1 a 3 oraciones). Usá solo lo que dijo el dueño: no agregues hechos, horarios, precios, promesas ni disculpas que no dijo. " +
       (miNumero
-        ? `Si el dueño dice "mi número", "mi celular", "mi contacto" o pide que lo contacten ("que me escriba", "que me llame", "que se comunique conmigo"), el número del dueño es ${miNumero}: ponelo en el mensaje completo y tal cual, con el + y sin cortarlo (por ejemplo: "Escribime o llamame al ${miNumero}"). `
+        ? `Si el dueño dice "mi número", "mi celular", "mi contacto" o pide que lo contacten ("que me escriba", "que me llame", "que se comunique conmigo"), el número del dueño es ${miNumero}: ponelo en el mensaje completo y tal cual, con el + y sin cortarlo. En ese caso el mensaje es: "Comunicate conmigo al ${miNumero} apenas estés libre. Saludos cordiales." (sumá lo que el dueño haya dicho además, sin inventar nada más). `
         : "") +
       "El texto del dueño ya viene sin el número del cliente ni el verbo de la orden: es lo que quiere decirle. Hablale al cliente de vos: " +
       "\"que me escriba\" pasa a \"escribime\", \"que me llame\" a \"llamame\", \"le contesto\" a \"te contesto\", \"le confirmo\" a \"te confirmo\". " +
