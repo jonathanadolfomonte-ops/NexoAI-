@@ -12,10 +12,10 @@ assert.notEqual(start, -1, "server.js debe contener leerOrden");
 assert.notEqual(end, -1, "debe existir el límite de la función leerOrden");
 const functionSource = source.slice(start, end);
 const context = {
-  COMANDO_DUENO: /^\\s*(?:dec[ií]le|dile|avis[aá]le|transmit[ií]le|respond[eé]le|contest[aá]le|escrib[ií]le|mand[aá]le)\\b/i,
-  soloDigitos: (s) => String(s || "").replace(/\\D/g, ""),
+  COMANDO_DUENO: /^\s*(?:dec[ií]le|dile|avis[aá]le|transmit[ií]le|respond[eé]le|contest[aá]le|escrib[ií]le|mand[aá]le)\b/i,
+  soloDigitos: (s) => String(s || "").replace(/\D/g, ""),
 };
-vm.runInNewContext(functionSource + "\\nthis.leerOrden = leerOrden;", context);
+vm.runInNewContext(functionSource + "\nthis.leerOrden = leerOrden;", context);
 const leerOrden = context.leerOrden;
 
 test("reconoce el número cuando está después de 'al'", () => {
