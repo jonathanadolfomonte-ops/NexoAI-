@@ -225,12 +225,130 @@ app.post("/webhook", (req, res) => {
   for (const eco of ecos) manejarEco(eco);
 });
 
+// ---- Ordenes del dueño (inicio)
+// El dueño le escribe al bot desde OWNER_WHATSAPP_NUMBER, por ejemplo:
+//   "Decile al cliente que estoy viajando y apenas llegue le confirmo"
+//   "Decile al 3873123456 que estoy en una reunion, ya le escribo"
+// El bot redacta el mensaje en nombre del dueño y se lo manda al cliente.
+// Sin numero, va al ultimo cliente por el que se le aviso al dueño (pedido o derivacion).
+const COMANDO_DUENO = /^\s*(?:dec[ií]le|dile|avis[aá]le|transmit[ií]le|respond[eé]le|contest[aá]le|escrib[ií]le|mand[aá]le)\b/i;
+// WhatsApp solo deja escribir libremente dentro de las 24 h del ultimo mensaje del cliente
+const VENTANA_MS = 23 * 60 * 60 * 1000;
+const ultimoContacto = new Map(); // ultimos 10 digitos del cliente -> ms de su ultimo mensaje
+let ultimoAviso = null; // { numero, ts } del ultimo cliente por el que se aviso al dueño
+
+const soloDigitos = (s) => String(s || "").replace(/\D/g, "");
+const claveNumero = (s) => soloDigitos(s).slice(-10);
+
+function esDelDueno(numero) {
+  if (!OWNER_WHATSAPP_NUMBER) return false;
+  const a = claveNumero(numero);
+  return a.length === 10 && a === claveNumero(OWNER_WHATSAPP_NUMBER);
+}
+
+function anotarContacto(numero) {
+  if (ultimoContacto.size > 2000) ultimoContacto.clear();
+  ultimoContacto.set(claveNumero(numero), Date.now());
+}
+
+// Saca de la orden el numero del cliente (si lo escribio) y deja solo lo que hay que transmitir
+function leerOrden(texto) {
+  const antes = texto.split(/\bque\b|:/i)[0].slice(0, 120);
+  const hallado = antes.match(/\+?\d[\d\s().-]{8,}\d/);
+  if (!hallado) return { destino: null, invalido: /\d{5,}/.test(antes), instruccion: texto.trim() };
+  const instruccion = texto.replace(hallado[0], " ").replace(/\s{2,}/g, " ").trim();
+  let d = soloDigitos(hallado[0]);
+  if (d.length === 10) d = "549" + d; // codigo de area + abonado
+  else if (d.length === 12 && d.startsWith("54")) d = "549" + d.slice(2);
+  else if (d.length === 11 && d.startsWith("9")) d = "54" + d;
+  const valido = d.length === 13 && d.startsWith("549");
+  return { destino: valido ? d : null, invalido: !valido, instruccion };
+}
+
+async function redactarMensajeDelDueno(instruccion) {
+  const r = await claude.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 300,
+    system:
+      "Sos el asistente de WhatsApp de un negocio. La persona dueña del negocio te pide que le transmitas un mensaje a un cliente. " +
+      "Redactá el mensaje tal como le va a llegar al cliente, escrito en primera persona como si lo escribiera el dueño (por ejemplo: \"estoy viajando\", \"te confirmo\"), " +
+      "en español rioplatense, amable y breve (1 a 3 oraciones). Usá solo lo que dijo el dueño: no agregues hechos, horarios, precios, promesas ni disculpas que no dijo. " +
+      "No pongas saludo con nombre, comillas ni encabezados. Si el pedido no es un mensaje para un cliente, respondé exactamente: NO_APLICA. Devolvé solo el mensaje.",
+    messages: [{ role: "user", content: instruccion }],
+  });
+  const texto = r.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+  if (texto === "NO_APLICA") return "";
+  return separarMarcas(texto).texto;
+}
+
+async function manejarOrdenDelDueno(dueno, texto) {
+  const { destino: escrito, invalido, instruccion } = leerOrden(texto);
+  if (invalido) {
+    await enviar(dueno, "No entendí el número del cliente. Escribilo con código de área, por ejemplo: Decile al 3873123456 que ...");
+    return;
+  }
+  const reciente = ultimoAviso && Date.now() - ultimoAviso.ts < 24 * 60 * 60 * 1000 ? ultimoAviso.numero : null;
+  const destino = escrito || reciente;
+  if (!destino) {
+    await enviar(dueno, "No sé a qué cliente mandárselo: no hay ningún aviso reciente. Escribí el número, por ejemplo: Decile al 3873123456 que ...");
+    return;
+  }
+  const ultimo = ultimoContacto.get(claveNumero(destino));
+  if (ultimo && Date.now() - ultimo > VENTANA_MS) {
+    await enviar(dueno, `Ese cliente escribió hace más de 24 horas y WhatsApp no me deja mandarle mensajes. Escribile vos: https://wa.me/${destino}`);
+    return;
+  }
+  let mensaje = "";
+  try {
+    mensaje = await redactarMensajeDelDueno(instruccion);
+  } catch (err) {
+    console.error("Error redactando el mensaje del dueño:", err);
+  }
+  if (!mensaje) {
+    await enviar(dueno, "No pude armar el mensaje para el cliente. Probá de nuevo, por ejemplo: Decile al cliente que estoy viajando y apenas llegue le confirmo.");
+    return;
+  }
+  const completo = `💬 Mensaje de la persona del local:\n${mensaje}`;
+  const ok = await enviar(destino, completo);
+  if (!ok) {
+    await enviar(dueno, `WhatsApp no me dejó mandar el mensaje (puede que hayan pasado más de 24 horas desde que el cliente escribió). Escribile vos: https://wa.me/${destino}`);
+    return;
+  }
+  // Para que el bot sepa lo que dijo el dueño si el cliente responde
+  const h = historiales.get(destino);
+  if (h?.length) {
+    if (h[h.length - 1].role === "assistant") h[h.length - 1].content += `\n\n${completo}`;
+    else h.push({ role: "assistant", content: completo });
+  }
+  registrarEnPlanilla({
+    numero: destino,
+    texto: `(orden del dueño) ${instruccion}`,
+    respuesta: completo,
+    estado: "Mensaje del dueño transmitido",
+  });
+  await enviar(dueno, `✅ Le mandé a +${destino}:\n\n${completo}`);
+}
+// ---- Ordenes del dueño (fin)
+
 async function procesar(m) {
   if (vistos.has(m.id)) return;
   vistos.add(m.id);
   if (vistos.size > 1000) vistos.clear();
 
   const numero = m.from;
+
+  // Ordenes del dueño ("decile al cliente que ..."): solo desde OWNER_WHATSAPP_NUMBER
+  if (m.type === "text" && esDelDueno(numero) && COMANDO_DUENO.test(m.text.body)) {
+    await manejarOrdenDelDueno(numero, m.text.body).catch((err) =>
+      console.error("Error con la orden del dueño:", err)
+    );
+    return;
+  }
+  if (!esDelDueno(numero)) anotarContacto(numero);
 
   // Si el dueño le respondio a este cliente desde la app, el bot se queda callado un rato
   if (estaPausado(numero)) {
@@ -419,6 +537,7 @@ async function avisarDerivacion(numeroCliente, motivo) {
     console.error("Cliente derivado pero falta OWNER_WHATSAPP_NUMBER. Motivo:", motivo);
     return;
   }
+  ultimoAviso = { numero: numeroCliente, ts: Date.now() };
   const ultimo = derivaciones.get(numeroCliente) || 0;
   if (Date.now() - ultimo < ESPERA_ENTRE_AVISOS_MS) return;
   derivaciones.set(numeroCliente, Date.now());
@@ -434,6 +553,7 @@ async function avisarPedido(numeroCliente, resumen) {
     console.error("Pedido confirmado pero falta OWNER_WHATSAPP_NUMBER. Resumen:", resumen);
     return;
   }
+  ultimoAviso = { numero: numeroCliente, ts: Date.now() };
   const aviso =
     `🛒 Nuevo pedido por WhatsApp\n\n${resumen}\n\n` +
     `Cliente: +${numeroCliente}\nEscribirle: https://wa.me/${numeroCliente}`;
@@ -482,12 +602,13 @@ async function enviarContenido(numero, contenido) {
         if (enviadosPorBot.size > 2000) enviadosPorBot.clear();
       }
       console.log(`Mensaje enviado a ${destino}${destino !== numero ? ` (formato alternativo; Meta lo recibio como ${numero})` : ""}`);
-      return;
+      return true;
     }
     const cuerpo = await r.text();
     console.error(`Error enviando a WhatsApp (destino ${destino}):`, r.status, cuerpo);
-    if (!cuerpo.includes("131030")) return; // otro error: no tiene sentido probar otros formatos
+    if (!cuerpo.includes("131030")) return false; // otro error: no tiene sentido probar otros formatos
   }
+  return false;
 }
 
 async function enviar(numero, texto) {
