@@ -382,6 +382,7 @@ async function manejarOrdenDelDueno(dueno, texto) {
   }
   const completo = /^Hola,? soy NexoAI/i.test(mensaje) ? mensaje : `💬 Mensaje de la persona del local:\n${mensaje}`;
   const ok = await enviar(destino, completo);
+  if (ok && /^Hola,? soy NexoAI/i.test(mensaje)) ordenesContacto.set(claveNumero(destino), Date.now());
   if (!ok) {
     await enviar(dueno, `WhatsApp no me dejó mandar el mensaje (puede que hayan pasado más de 24 horas desde que el cliente escribió). Escribile vos: https://wa.me/${destino}`);
     return;
@@ -603,16 +604,52 @@ function separarMarcas(respuesta) {
 const derivaciones = new Map();
 const ESPERA_ENTRE_AVISOS_MS = 30 * 60 * 1000;
 
-// Meta rechaza el mensaje unos segundos DESPUES de aceptarlo (por ejemplo, error 131047: pasaron mas de 24 h
-// desde que la persona le escribio a este numero). Se le avisa al dueño para que escriba el mismo.
+// Meta rechaza el mensaje unos segundos DESPUES de aceptarlo. El caso tipico es el error 131047: pasaron mas de
+// 24 h desde que la persona le escribio a este numero y WhatsApp solo deja mandarle una PLANTILLA aprobada.
+// Si el dueño pidio "que se comunique conmigo", se reintenta con la plantilla; si no se puede, se le avisa al dueño.
+const PLANTILLA_CONTACTO = process.env.PLANTILLA_CONTACTO || "aviso_contacto_dueno";
+const PLANTILLA_IDIOMA = process.env.PLANTILLA_IDIOMA || "es_AR";
+const ordenesContacto = new Map(); // ultimos 10 digitos del cliente -> ms de la orden de contacto
+const plantillasEnviadas = new Map(); // ultimos 10 digitos del cliente -> ms del reintento con plantilla
 const fallosAvisados = new Map();
+
+function enviarPlantillaContacto(destino) {
+  const miNumero = numeroDelDuenoParaMostrar();
+  if (!miNumero) return Promise.resolve(false);
+  return enviarContenido(destino, {
+    type: "template",
+    template: {
+      name: PLANTILLA_CONTACTO,
+      language: { code: PLANTILLA_IDIOMA },
+      components: [{ type: "body", parameters: [{ type: "text", text: miNumero }] }],
+    },
+  });
+}
+
 async function avisarFalloEntrega(s) {
   const destino = s?.recipient_id;
   if (!OWNER_WHATSAPP_NUMBER || !destino || esDelDueno(destino)) return;
-  if (Date.now() - (fallosAvisados.get(destino) || 0) < 60 * 1000) return;
-  if (fallosAvisados.size > 500) fallosAvisados.clear();
-  fallosAvisados.set(destino, Date.now());
+  const k = claveNumero(destino);
+  const ahora = Date.now();
   const ventana = (s.errors || []).some((e) => e.code === 131047);
+  const eraPlantilla = ahora - (plantillasEnviadas.get(k) || 0) < 2 * 60 * 1000;
+
+  if (ventana && !eraPlantilla && ahora - (ordenesContacto.get(k) || 0) < 5 * 60 * 1000) {
+    plantillasEnviadas.set(k, ahora);
+    if (plantillasEnviadas.size > 500) plantillasEnviadas.clear();
+    const ok = await enviarPlantillaContacto(destino).catch(() => false);
+    if (ok) {
+      await enviar(
+        OWNER_WHATSAPP_NUMBER,
+        `ℹ️ Pasaron más de 24 horas desde que +${destino} le escribió a este número, así que le mandé el aviso con la plantilla de WhatsApp.`
+      );
+      return;
+    }
+  }
+
+  if (!eraPlantilla && ahora - (fallosAvisados.get(destino) || 0) < 60 * 1000) return;
+  if (fallosAvisados.size > 500) fallosAvisados.clear();
+  fallosAvisados.set(destino, ahora);
   const motivo = ventana
     ? "pasaron más de 24 horas desde que esa persona le escribió a este número, y WhatsApp no deja mandarle mensajes libres"
     : "WhatsApp no pudo entregarlo";
