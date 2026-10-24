@@ -315,7 +315,7 @@ function leerOrden(textoOriginal) {
 function numeroDelDuenoParaMostrar() {
   const d = soloDigitos(OWNER_WHATSAPP_NUMBER || "").slice(-10);
   // Completo, con codigo de pais: +54 9 3873 441084 (WhatsApp lo muestra como enlace para escribirle)
-  return d.length === 10 ? `+54 9 ${d.slice(0, 4)} ${d.slice(4)}` : "";
+  return d.length === 10 ? `+549${d}` : "";
 }
 
 async function redactarMensajeDelDueno(instruccion) {
