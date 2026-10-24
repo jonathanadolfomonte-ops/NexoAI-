@@ -231,7 +231,26 @@ app.post("/webhook", (req, res) => {
 //   "Decile al 3873123456 que estoy en una reunion, ya le escribo"
 // El bot redacta el mensaje en nombre del dueño y se lo manda al cliente.
 // Sin numero, va al ultimo cliente por el que se le aviso al dueño (pedido o derivacion).
-const COMANDO_DUENO = /^\s*(?:dec[ií]le|dile|avis[aá]le|transmit[ií]le|respond[eé]le|contest[aá]le|escrib[ií]le|mand[aá]le)\b/i;
+// Verbos con los que el dueño da una orden: "decile", "avisale", "escribile", "dile al número ... que ..."
+const VERBOS_ORDEN =
+  "dec[ií]le|dile|decirle|dec[ií]|avis[aá]le|avisarle|avis[aá]|transmit[ií]le|respond[eé]le|contest[aá]le|escrib[ií]le|mand[aá]le|comunic[aá]le|cont[aá]le|inform[aá]le|notific[aá]le|pas[aá]le|hac[eé]le saber";
+const COMANDO_DUENO = new RegExp(`^\\s*(?:${VERBOS_ORDEN})(?![\\p{L}\\p{N}])`, "iu");
+// "al número +549...", "al cliente 3873...", "a celular ..." aunque venga después del "que"
+const DESTINO_EXPLICITO =
+  /\b(?:al|a)\s+(?:n[uú]mero|nro\.?|celular|cel\.?|cliente|contacto)\s*[:.]?\s*(\+?\d[\d\s().-]{8,}\d)(?=\s*(?:\bque\b|:|,))/iu;
+
+// Saca caracteres invisibles y signos o emojis del principio (el dictado y el teclado a veces los agregan)
+function limpiarOrden(t) {
+  return String(t || "")
+    .replace(/[​-‏‪-‮⁠﻿]/g, "")
+    .replace(/^[^\p{L}\p{N}+]+/u, "")
+    .trim();
+}
+
+function esOrdenDelDueno(texto) {
+  const t = limpiarOrden(texto);
+  return COMANDO_DUENO.test(t) || DESTINO_EXPLICITO.test(t);
+}
 // WhatsApp solo deja escribir libremente dentro de las 24 h del ultimo mensaje del cliente
 const VENTANA_MS = 23 * 60 * 60 * 1000;
 const ultimoContacto = new Map(); // ultimos 10 digitos del cliente -> ms de su ultimo mensaje
@@ -252,11 +271,38 @@ function anotarContacto(numero) {
 }
 
 // Saca de la orden el numero del cliente (si lo escribio) y deja solo lo que hay que transmitir
-function leerOrden(texto) {
+// Deja solo lo que hay que transmitir: sin el verbo ("decile"), sin "al número ...", sin el "que" de entrada
+function limpiarInstruccion(texto, quitar) {
+  let t = quitar ? texto.replace(quitar, " ") : texto;
+  t = t
+    .replace(new RegExp(`^\\s*(?:${VERBOS_ORDEN})(?![\\p{L}\\p{N}])`, "iu"), " ")
+    .replace(/^\s*(?:(?:al|a la|a el|a)\s+)?(?:n[uú]mero|nro\.?|celular|cel\.?|cliente|contacto)\s*[:.,]?\s*/iu, " ")
+    .replace(/^\s*(?:al|a)\s+(?=que\b)/i, " ")
+    .replace(/^\s*(?:que|:)\s+/i, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;:])/g, "$1")
+    .trim();
+  return t || texto.trim();
+}
+
+// Saca de la orden el numero del cliente (si lo escribio) y deja solo lo que hay que transmitir.
+// El numero puede ir antes del "que" ("Dile al 3873... que ...") o despues ("Avisale que ... al numero 3873... que ...")
+function leerOrden(textoOriginal) {
+  const texto = limpiarOrden(textoOriginal);
   const antes = texto.split(/\bque\b|:/i)[0].slice(0, 120);
-  const hallado = antes.match(/\+?\d[\d\s().-]{8,}\d/);
-  if (!hallado) return { destino: null, invalido: /\d{5,}/.test(antes), instruccion: texto.trim() };
-  const instruccion = texto.replace(hallado[0], " ").replace(/\s{2,}/g, " ").trim();
+  let hallado = antes.match(/\+?\d[\d\s().-]{8,}\d/);
+  let quitar = hallado ? hallado[0] : null;
+  if (!hallado) {
+    const explicito = texto.match(DESTINO_EXPLICITO);
+    if (explicito) {
+      hallado = [explicito[1]];
+      quitar = explicito[0];
+    }
+  }
+  if (!hallado) {
+    return { destino: null, invalido: /\d{5,}/.test(antes), instruccion: limpiarInstruccion(texto, null) };
+  }
+  const instruccion = limpiarInstruccion(texto, quitar);
   let d = soloDigitos(hallado[0]);
   if (d.length === 10) d = "549" + d; // codigo de area + abonado
   else if (d.length === 12 && d.startsWith("54")) d = "549" + d.slice(2);
@@ -283,7 +329,9 @@ async function redactarMensajeDelDueno(instruccion) {
       (miNumero
         ? `Si el dueño dice "mi número", "mi celular", "mi contacto" o "me llame/se comunique conmigo", el número del dueño es ${miNumero}: ponelo en el mensaje (por ejemplo: "Comunicate conmigo a la brevedad al ${miNumero}"). `
         : "") +
-      "No pongas saludo con nombre, comillas ni encabezados. Si el pedido no es un mensaje para un cliente, respondé exactamente: NO_APLICA. Devolvé solo el mensaje.",
+      "El texto del dueño ya viene sin el número del cliente ni el verbo de la orden: es lo que quiere decirle. Hablale al cliente de vos: " +
+      "\"que me escriba\" pasa a \"escribime\", \"que me llame\" a \"llamame\", \"le contesto\" a \"te contesto\", \"le confirmo\" a \"te confirmo\". " +
+      "No pongas saludo con nombre, comillas ni encabezados. Respondé NO_APLICA solo si el texto no tiene ningún mensaje para transmitir (por ejemplo, está vacío o es solo un número). Devolvé solo el mensaje.",
     messages: [{ role: "user", content: instruccion }],
   });
   const texto = r.content
@@ -291,7 +339,10 @@ async function redactarMensajeDelDueno(instruccion) {
     .map((b) => b.text)
     .join("\n")
     .trim();
-  if (texto === "NO_APLICA") return "";
+  if (texto === "NO_APLICA") {
+    console.warn("Orden del dueño: Claude respondió NO_APLICA. Instrucción:", JSON.stringify(instruccion));
+    return "";
+  }
   return separarMarcas(texto).texto;
 }
 
@@ -352,7 +403,10 @@ async function procesar(m) {
   const numero = m.from;
 
   // Ordenes del dueño ("decile al cliente que ..."): solo desde OWNER_WHATSAPP_NUMBER
-  if (m.type === "text" && esDelDueno(numero) && COMANDO_DUENO.test(m.text.body)) {
+  if (m.type === "text" && esDelDueno(numero) && !esOrdenDelDueno(m.text.body)) {
+    console.log("Texto del dueño sin orden reconocida:", JSON.stringify(m.text.body.slice(0, 60)));
+  }
+  if (m.type === "text" && esDelDueno(numero) && esOrdenDelDueno(m.text.body)) {
     await manejarOrdenDelDueno(numero, m.text.body).catch((err) =>
       console.error("Error con la orden del dueño:", err)
     );
