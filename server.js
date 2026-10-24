@@ -265,7 +265,14 @@ function leerOrden(texto) {
   return { destino: valido ? d : null, invalido: !valido, instruccion };
 }
 
+// Numero del dueño tal como se lo muestra al cliente: 3873-441084
+function numeroDelDuenoParaMostrar() {
+  const d = soloDigitos(OWNER_WHATSAPP_NUMBER || "").slice(-10);
+  return d.length === 10 ? `${d.slice(0, 4)}-${d.slice(4)}` : "";
+}
+
 async function redactarMensajeDelDueno(instruccion) {
+  const miNumero = numeroDelDuenoParaMostrar();
   const r = await claude.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 300,
@@ -273,6 +280,9 @@ async function redactarMensajeDelDueno(instruccion) {
       "Sos el asistente de WhatsApp de un negocio. La persona dueña del negocio te pide que le transmitas un mensaje a un cliente. " +
       "Redactá el mensaje tal como le va a llegar al cliente, escrito en primera persona como si lo escribiera el dueño (por ejemplo: \"estoy viajando\", \"te confirmo\"), " +
       "en español rioplatense, amable y breve (1 a 3 oraciones). Usá solo lo que dijo el dueño: no agregues hechos, horarios, precios, promesas ni disculpas que no dijo. " +
+      (miNumero
+        ? `Si el dueño dice "mi número", "mi celular", "mi contacto" o "me llame/se comunique conmigo", el número del dueño es ${miNumero}: ponelo en el mensaje (por ejemplo: "Comunicate conmigo a la brevedad al ${miNumero}"). `
+        : "") +
       "No pongas saludo con nombre, comillas ni encabezados. Si el pedido no es un mensaje para un cliente, respondé exactamente: NO_APLICA. Devolvé solo el mensaje.",
     messages: [{ role: "user", content: instruccion }],
   });
