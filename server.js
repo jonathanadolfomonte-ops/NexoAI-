@@ -211,6 +211,7 @@ app.post("/webhook", (req, res) => {
     for (const s of c.value?.statuses || []) {
       if (s.status === "failed") {
         console.error(`WhatsApp NO pudo entregar a ${s.recipient_id}:`, JSON.stringify(s.errors || s));
+        avisarFalloEntrega(s).catch((err) => console.error("Error avisando el fallo de entrega:", err));
       } else {
         console.log(`Entrega a ${s.recipient_id}: ${s.status}`);
       }
@@ -601,6 +602,25 @@ function separarMarcas(respuesta) {
 // Para no avisar muchas veces por la misma conversacion
 const derivaciones = new Map();
 const ESPERA_ENTRE_AVISOS_MS = 30 * 60 * 1000;
+
+// Meta rechaza el mensaje unos segundos DESPUES de aceptarlo (por ejemplo, error 131047: pasaron mas de 24 h
+// desde que la persona le escribio a este numero). Se le avisa al dueño para que escriba el mismo.
+const fallosAvisados = new Map();
+async function avisarFalloEntrega(s) {
+  const destino = s?.recipient_id;
+  if (!OWNER_WHATSAPP_NUMBER || !destino || esDelDueno(destino)) return;
+  if (Date.now() - (fallosAvisados.get(destino) || 0) < 60 * 1000) return;
+  if (fallosAvisados.size > 500) fallosAvisados.clear();
+  fallosAvisados.set(destino, Date.now());
+  const ventana = (s.errors || []).some((e) => e.code === 131047);
+  const motivo = ventana
+    ? "pasaron más de 24 horas desde que esa persona le escribió a este número, y WhatsApp no deja mandarle mensajes libres"
+    : "WhatsApp no pudo entregarlo";
+  await enviar(
+    OWNER_WHATSAPP_NUMBER,
+    `⚠️ No se entregó el mensaje a +${destino}: ${motivo}.\nEscribile vos directamente: https://wa.me/${destino}`
+  );
+}
 
 async function avisarDerivacion(numeroCliente, motivo) {
   if (!OWNER_WHATSAPP_NUMBER) {
