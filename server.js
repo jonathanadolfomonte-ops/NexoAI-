@@ -315,7 +315,7 @@ function leerOrden(textoOriginal) {
 function numeroDelDuenoParaMostrar() {
   const d = soloDigitos(OWNER_WHATSAPP_NUMBER || "").slice(-10);
   // Completo, con codigo de pais: +54 9 3873 441084 (WhatsApp lo muestra como enlace para escribirle)
-  return d.length === 10 ? `+54 9 ${d.slice(0, 4)} ${d.slice(4)}` : "";
+  return d.length === 10 ? `+549${d}` : "";
 }
 
 async function redactarMensajeDelDueno(instruccion) {
@@ -328,7 +328,7 @@ async function redactarMensajeDelDueno(instruccion) {
       "Redactá el mensaje tal como le va a llegar al cliente, escrito en primera persona como si lo escribiera el dueño (por ejemplo: \"estoy viajando\", \"te confirmo\"), " +
       "en español rioplatense, amable y breve (1 a 3 oraciones). Usá solo lo que dijo el dueño: no agregues hechos, horarios, precios, promesas ni disculpas que no dijo. " +
       (miNumero
-        ? `Si el dueño dice "mi número", "mi celular", "mi contacto" o pide que lo contacten ("que me escriba", "que me llame", "que se comunique conmigo"), el número del dueño es ${miNumero}: ponelo en el mensaje completo y tal cual, con el + y sin cortarlo. En ese caso el mensaje es: "Comunicate conmigo al ${miNumero} apenas estés libre. Saludos cordiales." (sumá lo que el dueño haya dicho además, sin inventar nada más). `
+        ? `Si el dueño dice "mi número", "mi celular", "mi contacto" o pide que lo contacten ("que me escriba", "que me llame", "que se comunique conmigo"), el número del dueño es ${miNumero}: ponelo en el mensaje completo y tal cual, con el + y sin cortarlo. En ese caso el mensaje es exactamente: "Hola, soy NexoAI, un asistente virtual. El número ${miNumero} quiere que te comuniques con él cuando estés libre. Saludos cordiales." (sumá lo que el dueño haya dicho además, sin inventar nada más). `
         : "") +
       "El texto del dueño ya viene sin el número del cliente ni el verbo de la orden: es lo que quiere decirle. Hablale al cliente de vos: " +
       "\"que me escriba\" pasa a \"escribime\", \"que me llame\" a \"llamame\", \"le contesto\" a \"te contesto\", \"le confirmo\" a \"te confirmo\". " +
@@ -374,7 +374,7 @@ async function manejarOrdenDelDueno(dueno, texto) {
     await enviar(dueno, "No pude armar el mensaje para el cliente. Probá de nuevo, por ejemplo: Decile al cliente que estoy viajando y apenas llegue le confirmo.");
     return;
   }
-  const completo = `💬 Mensaje de la persona del local:\n${mensaje}`;
+  const completo = /^Hola, soy NexoAI/i.test(mensaje) ? mensaje : `💬 Mensaje de la persona del local:\n${mensaje}`;
   const ok = await enviar(destino, completo);
   if (!ok) {
     await enviar(dueno, `WhatsApp no me dejó mandar el mensaje (puede que hayan pasado más de 24 horas desde que el cliente escribió). Escribile vos: https://wa.me/${destino}`);
