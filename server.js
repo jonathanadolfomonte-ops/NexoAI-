@@ -251,17 +251,34 @@ function anotarContacto(numero) {
   ultimoContacto.set(claveNumero(numero), Date.now());
 }
 
-// Saca de la orden el numero del cliente (si lo escribio) y deja solo lo que hay que transmitir
+// Interpreta órdenes naturales del dueño y busca el teléfono en cualquier parte del texto.
 function leerOrden(texto) {
-  const antes = texto.split(/\bque\b|:/i)[0].slice(0, 120);
-  const hallado = antes.match(/\+?\d[\d\s().-]{8,}\d/);
-  if (!hallado) return { destino: null, invalido: /\d{5,}/.test(antes), instruccion: texto.trim() };
-  const instruccion = texto.replace(hallado[0], " ").replace(/\s{2,}/g, " ").trim();
+  const hallado = texto.match(/\+?\d[\d\s().-]{8,}\d/);
+  const limpiarInstruccion = (valor) =>
+    valor
+      .replace(COMANDO_DUENO, " ")
+      .replace(/\b(?:al|a la|a)\s+(?:cliente|n[uú]mero|tel[eé]fono)\b/gi, " ")
+      .replace(/\b(?:n[uú]mero|tel[eé]fono)\b/gi, " ")
+      .replace(/^\s*(?:que|:|,|[-–])\s*/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+  if (!hallado) {
+    const antes = texto.split(/\bque\b|:/i)[0].slice(0, 120);
+    return {
+      destino: null,
+      invalido: /\d{5,}/.test(antes),
+      instruccion: limpiarInstruccion(texto),
+    };
+  }
+
   let d = soloDigitos(hallado[0]);
-  if (d.length === 10) d = "549" + d; // codigo de area + abonado
+  if (d.length === 10) d = "549" + d; // código de área + abonado
   else if (d.length === 12 && d.startsWith("54")) d = "549" + d.slice(2);
   else if (d.length === 11 && d.startsWith("9")) d = "54" + d;
   const valido = d.length === 13 && d.startsWith("549");
+  const sinNumero = texto.replace(hallado[0], " ");
+  const instruccion = limpiarInstruccion(sinNumero);
   return { destino: valido ? d : null, invalido: !valido, instruccion };
 }
 
