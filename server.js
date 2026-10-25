@@ -181,6 +181,29 @@ function firmaValida(req) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// ---- Reenvio del 789 al asistente personal (inicio)
+// Los mensajes del numero personal (Lindsy) llegan a este mismo webhook; se reenvian tal cual
+// (mismo cuerpo y misma firma) al servicio nexoai-personal y aca no se procesan.
+const ID_TELEFONO_PERSONAL_789 = process.env.REENVIAR_PHONE_NUMBER_ID || "1369260442944020";
+const REENVIAR_URL = process.env.REENVIAR_URL || "https://nexoai-personal.onrender.com/webhook";
+
+async function reenviarAlPersonal(req) {
+  try {
+    const r = await fetch(REENVIAR_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Hub-Signature-256": req.get("x-hub-signature-256") || "",
+      },
+      body: req.rawBody,
+    });
+    console.log("Reenviado al asistente personal:", r.status);
+  } catch (err) {
+    console.error("Error reenviando al asistente personal:", err);
+  }
+}
+// ---- Reenvio del 789 al asistente personal (fin)
+
 // Meta manda aca cada mensaje que escribe un cliente
 app.post("/webhook", (req, res) => {
   console.log("Webhook POST recibido");
@@ -190,7 +213,13 @@ app.post("/webhook", (req, res) => {
   }
   res.sendStatus(200); // responder rapido; Meta reintenta si tarda
 
-  const cambios = (req.body.entry || []).flatMap((e) => e.changes || []);
+  const todosLosCambios = (req.body.entry || []).flatMap((e) => e.changes || []);
+  const cambios = todosLosCambios.filter(
+    (c) => c.value?.metadata?.phone_number_id !== ID_TELEFONO_PERSONAL_789
+  );
+  if (cambios.length !== todosLosCambios.length) {
+    reenviarAlPersonal(req);
+  }
 
   // Nombre de perfil de cada cliente (para el registro de conversaciones)
   if (nombresPorNumero.size > 1000) nombresPorNumero.clear();
