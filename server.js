@@ -188,19 +188,26 @@ const ID_TELEFONO_PERSONAL_789 = process.env.REENVIAR_PHONE_NUMBER_ID || "136926
 const REENVIAR_URL = process.env.REENVIAR_URL || "https://nexoai-personal.onrender.com/webhook";
 
 async function reenviarAlPersonal(req) {
-  try {
-    const r = await fetch(REENVIAR_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Hub-Signature-256": req.get("x-hub-signature-256") || "",
-      },
-      body: req.rawBody,
-    });
-    console.log("Reenviado al asistente personal:", r.status);
-  } catch (err) {
-    console.error("Error reenviando al asistente personal:", err);
+  // El servicio personal (plan gratis) puede estar dormido: el primer intento falla mientras arranca.
+  // Se reintenta varias veces para que el mensaje no se pierda.
+  const cuerpo = req.rawBody;
+  const firma = req.get("x-hub-signature-256") || "";
+  const ESPERAS_MS = [0, 8000, 15000, 20000, 25000];
+  for (let i = 0; i < ESPERAS_MS.length; i++) {
+    if (ESPERAS_MS[i]) await new Promise((ok) => setTimeout(ok, ESPERAS_MS[i]));
+    try {
+      const r = await fetch(REENVIAR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Hub-Signature-256": firma },
+        body: cuerpo,
+      });
+      console.log(`Reenviado al asistente personal (intento ${i + 1}):`, r.status);
+      if (r.ok) return;
+    } catch (err) {
+      console.error(`Error reenviando al asistente personal (intento ${i + 1}):`, err);
+    }
   }
+  console.error("No se pudo reenviar al asistente personal tras varios intentos");
 }
 // ---- Reenvio del 789 al asistente personal (fin)
 
