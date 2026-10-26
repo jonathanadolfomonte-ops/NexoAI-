@@ -192,6 +192,18 @@ async function reenviarAlPersonal(req) {
   // Se reintenta varias veces para que el mensaje no se pierda.
   const cuerpo = req.rawBody;
   const firma = req.get("x-hub-signature-256") || "";
+  // Primero se despierta el servicio personal con una consulta simple (GET) y se espera a que responda.
+  const urlBase = REENVIAR_URL.replace(/\/webhook\/?$/, "/");
+  for (let w = 0; w < 18; w++) {
+    try {
+      const rw = await fetch(urlBase, { method: "GET", signal: AbortSignal.timeout(25000) });
+      console.log(`Asistente personal despierto (consulta ${w + 1}):`, rw.status);
+      if (rw.status < 500) break;
+    } catch (err) {
+      console.log(`Despertando al asistente personal (consulta ${w + 1})...`);
+    }
+    await new Promise((ok) => setTimeout(ok, 5000));
+  }
   const ESPERAS_MS = [0, 8000, 15000, 20000, 25000, 30000, 40000, 60000, 60000, 60000];
   for (let i = 0; i < ESPERAS_MS.length; i++) {
     if (ESPERAS_MS[i]) await new Promise((ok) => setTimeout(ok, ESPERAS_MS[i]));
