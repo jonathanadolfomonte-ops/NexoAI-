@@ -70,6 +70,18 @@ if (!instruccionesLindsy) {
     "Si te preguntan quién sos, decís que sos Lindsy, el asistente personal de Jonathan. No inventás datos ni acciones. " +
     "No pedís ni aceptás claves, códigos ni datos bancarios.";
 }
+// Derivación a Jonathan: link directo a su WhatsApp (como en el bot de Moda Florencia)
+const LINK_JONATHAN = "https://wa.me/5493873441084";
+const MENSAJE_DERIVACION =
+  "¡Claro! 😊 Si querés hablar directamente con Jonathan, escribile por acá:\n" +
+  LINK_JONATHAN +
+  "\n\nÉl te responde apenas pueda.";
+const QUIERE_HABLAR_CON_JONATHAN = new RegExp(
+  "(hablar|comunicar|contactar|escribir|contacto|pasame|pasá|derivame|llamar|ver)[^.?!]{0,40}(jonathan|jona\\b|due[ñn]o|humano|persona real|una persona|alguien real)" +
+    "|(jonathan|due[ñn]o)[^.?!]{0,30}(hablar|contactar|n[uú]mero|whatsapp|contacto)" +
+    "|(quiero|necesito|puedo|podr[ií]a)[^.?!]{0,25}\\bjonathan\\b",
+  "i"
+);
 const SOLO_SALUDO = /^\s*(hola|holis?|buenas?|buen[oa]s?\s+(d[ií]as?|tardes?|noches?)|hey|ey|hello|hi)(\s+lindsy)?[\s!.¡,?]*$/i;
 
 // Memoria corta de cada conversacion (se borra si el servidor se reinicia)
@@ -236,6 +248,15 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
       ]);
       return;
     }
+  }
+  if (QUIERE_HABLAR_CON_JONATHAN.test(texto)) {
+    // Derivación fija con link, sin pasar por el modelo
+    historial.push({ role: "user", content: texto }, { role: "assistant", content: MENSAJE_DERIVACION });
+    while (historial.length > MAX_HISTORIAL) historial.shift();
+    if (historial[0]?.role === "assistant") historial.shift();
+    historialesPersonal.set(numero, historial);
+    await enviar(numero, MENSAJE_DERIVACION, phoneNumberId);
+    return;
   }
   historial.push({ role: "user", content: texto });
 
