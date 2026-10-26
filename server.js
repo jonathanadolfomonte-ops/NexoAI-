@@ -394,6 +394,9 @@ async function usarPlantillaPrimerMensaje(destino, phoneNumberId) {
 async function manejarFalloEntrega(s, phoneNumberId) {
   const destino = s?.recipient_id;
   if (!destino || esJonathan(destino)) return;
+  console.error("Entrega fallida:", JSON.stringify({ destino, errores: s?.errors }));
+  const errorWA = (s?.errors || [])[0];
+  const detalleError = errorWA ? ` (código ${errorWA.code}: ${String(errorWA.title || errorWA.message || "").slice(0, 120)})` : "";
   const o = ordenesRecientes.get(ultimos10(destino));
   if (!o || Date.now() - o.ts > 10 * 60 * 1000) return;
   const ventanaCerrada = (s.errors || []).some((e) => e.code === 131047 || e.code === 131049);
@@ -403,7 +406,7 @@ async function manejarFalloEntrega(s, phoneNumberId) {
   }
   if (o.falloAvisado) return;
   o.falloAvisado = true;
-  await enviar(NUMERO_AVISO_JONATHAN, `⚠️ WhatsApp no pudo entregar el mensaje a +${destino}. Escribile vos: https://wa.me/${destino}`, phoneNumberId);
+  await enviar(NUMERO_AVISO_JONATHAN, `⚠️ WhatsApp no pudo entregar el mensaje a +${destino}${detalleError}. Escribile vos: https://wa.me/${destino}`, phoneNumberId);
 }
 
 async function manejarOrdenDeJonathan(orden, phoneNumberId) {
