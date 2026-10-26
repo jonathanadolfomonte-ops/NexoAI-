@@ -223,6 +223,13 @@ app.post("/webhook", (req, res) => {
     .flatMap((c) => c.value?.message_echoes || []);
 
   console.log("Mensajes recibidos:", mensajes.length);
+  for (const c of cambios) {
+    for (const s of c.value?.statuses || []) {
+      if (s.status === "failed") {
+        manejarFalloEntrega(s, c.value?.metadata?.phone_number_id).catch((err) => console.error("Error con estado fallido:", err));
+      }
+    }
+  }
   for (const { mensaje, phoneNumberId } of mensajes) {
     procesar(mensaje, phoneNumberId).catch((err) => console.error("Error procesando mensaje:", err));
   }
@@ -253,6 +260,168 @@ async function avisarJonathanDesdeLindsy(numeroPersona, texto, phoneNumberId) {
   }
 }
 
+// ---- Mensajes de Jonathan a terceros (orden por WhatsApp desde su línea)
+// Ej.: "Lindsy, escribile al 3873123456 que ya llegué y mañana lo llamo".
+// Si la persona le escribió en las últimas 24 h, se manda el mensaje libre. Si no, WhatsApp lo rechaza (error 131047):
+// se manda la plantilla aprobada de contacto y el mensaje queda pendiente hasta que la persona responda.
+const PLANTILLA_PRIMER_MENSAJE = process.env.LINDSY_PLANTILLA || "aviso_contacto_dueno";
+const PLANTILLA_PRIMER_MENSAJE_IDIOMA = process.env.LINDSY_PLANTILLA_IDIOMA || "es_AR";
+const ordenesRecientes = new Map(); // últimos 10 dígitos -> { mensaje, ts, plantilla, falloAvisado }
+const mensajesPendientes = new Map(); // últimos 10 dígitos -> { mensaje, ts }
+const ultimos10 = (n) => String(n || "").replace(/\D/g, "").slice(-10);
+const esJonathan = (n) => ultimos10(n).length === 10 && ultimos10(n) === ultimos10(NUMERO_AVISO_JONATHAN);
+
+function normalizarDestino(crudo) {
+  let d = String(crudo || "").replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("0")) {
+    d = d.slice(1);
+    const m = d.match(/^(\d{2,4})15(\d{6,8})$/); // código de área + 15 + número
+    if (m && m[1].length + m[2].length === 10) d = m[1] + m[2];
+  }
+  if (d.length === 10) return "549" + d;
+  if (d.startsWith("549") && d.length === 13) return d;
+  if (d.startsWith("54") && d.length === 12) return "549" + d.slice(2);
+  if (!d.startsWith("54") && d.length >= 11 && d.length <= 15) return d; // número de otro país
+  return null;
+}
+
+function leerOrdenDeJonathan(texto) {
+  const t = String(texto || "");
+  const m = t.match(/\+?\d[\d\s().-]{7,}\d/);
+  if (!m) return null;
+  if (!/(escrib|mand[aá]|envi[aá]|dec[ií]|avis[aá]|salud[aá]|contact[aá])/i.test(t)) return null;
+  return { destino: normalizarDestino(m[0]), instruccion: t.replace(m[0], " ").replace(/\s+/g, " ").trim() };
+}
+
+async function redactarMensajeDeJonathan(instruccion) {
+  const r = await groq.chat.completions.create({
+    model: GROQ_MODEL,
+    max_tokens: 250,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Sos Lindsy, el asistente personal de Jonathan. Jonathan te pide que le escribas a una persona de su parte. " +
+          "Redactá solo el mensaje final que le vas a enviar, en español rioplatense, cálido y breve (máximo 3 líneas). " +
+          "Empezá con: Hola, soy Lindsy, el asistente personal de Jonathan. 😊 Te escribo de su parte. " +
+          "Hablá de Jonathan en tercera persona. Usá solo la información de la instrucción: no inventes datos, horarios, lugares ni promesas. " +
+          "Si la instrucción no contiene un mensaje claro para transmitir, devolvé exactamente SIN_MENSAJE. Sin comillas ni explicaciones.",
+      },
+      { role: "user", content: instruccion },
+    ],
+  });
+  return String(r.choices?.[0]?.message?.content || "").trim();
+}
+
+async function enviarConResultado(numero, texto, phoneNumberId) {
+  for (const destino of variantesNumero(numero)) {
+    const r = await enviarA(destino, texto, phoneNumberId);
+    if (r.ok) {
+      const datos = await r.json().catch(() => null);
+      const id = datos?.messages?.[0]?.id;
+      if (id) enviadosPorBot.add(id);
+      return true;
+    }
+    const cuerpo = await r.text().catch(() => "");
+    console.error(`Error enviando a ${destino}:`, r.status, cuerpo.slice(0, 200));
+    if (!cuerpo.includes("131030")) return false;
+  }
+  return false;
+}
+
+async function enviarPlantillaPrimerMensaje(numero, phoneNumberId) {
+  const miNumero = "+549" + ultimos10(NUMERO_AVISO_JONATHAN);
+  const template = { name: PLANTILLA_PRIMER_MENSAJE, language: { code: PLANTILLA_PRIMER_MENSAJE_IDIOMA } };
+  if (PLANTILLA_PRIMER_MENSAJE === "aviso_contacto_dueno") {
+    template.components = [{ type: "body", parameters: [{ type: "text", text: miNumero }] }];
+  }
+  for (const destino of variantesNumero(numero)) {
+    const r = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", to: destino, type: "template", template }),
+    });
+    if (r.ok) return true;
+    const cuerpo = await r.text().catch(() => "");
+    console.error(`Error enviando plantilla a ${destino}:`, r.status, cuerpo.slice(0, 200));
+    if (!cuerpo.includes("131030")) return false;
+  }
+  return false;
+}
+
+async function usarPlantillaPrimerMensaje(destino, phoneNumberId) {
+  const clave = ultimos10(destino);
+  const o = ordenesRecientes.get(clave);
+  if (!o || o.plantilla) return;
+  o.plantilla = true;
+  const ok = await enviarPlantillaPrimerMensaje(destino, phoneNumberId);
+  if (ok) {
+    mensajesPendientes.set(clave, { mensaje: o.mensaje, ts: Date.now() });
+    if (mensajesPendientes.size > 200) mensajesPendientes.clear();
+    await enviar(
+      NUMERO_AVISO_JONATHAN,
+      `ℹ️ +${destino} no te escribió en las últimas 24 h, así que WhatsApp no deja mandarle un mensaje libre. ` +
+        `Le mandé la plantilla de contacto y, apenas responda, le entrego tu mensaje:\n\n${o.mensaje}`,
+      phoneNumberId
+    );
+  } else {
+    await enviar(NUMERO_AVISO_JONATHAN, `⚠️ No pude escribirle a +${destino}. Escribile vos: https://wa.me/${destino}`, phoneNumberId);
+  }
+}
+
+async function manejarFalloEntrega(s, phoneNumberId) {
+  const destino = s?.recipient_id;
+  if (!destino || esJonathan(destino)) return;
+  const o = ordenesRecientes.get(ultimos10(destino));
+  if (!o || Date.now() - o.ts > 10 * 60 * 1000) return;
+  const ventanaCerrada = (s.errors || []).some((e) => e.code === 131047 || e.code === 131049);
+  if (ventanaCerrada && !o.plantilla) {
+    await usarPlantillaPrimerMensaje(destino, phoneNumberId);
+    return;
+  }
+  if (o.falloAvisado) return;
+  o.falloAvisado = true;
+  await enviar(NUMERO_AVISO_JONATHAN, `⚠️ WhatsApp no pudo entregar el mensaje a +${destino}. Escribile vos: https://wa.me/${destino}`, phoneNumberId);
+}
+
+async function manejarOrdenDeJonathan(orden, phoneNumberId) {
+  const jonathan = NUMERO_AVISO_JONATHAN;
+  if (!orden.destino) {
+    await enviar(jonathan, "No entendí el número. Escribilo con código de área, sin 0 ni 15. Por ejemplo: Lindsy, escribile al 3873123456 que ya llegué.", phoneNumberId);
+    return;
+  }
+  if (esJonathan(orden.destino)) {
+    await enviar(jonathan, "Ese es tu mismo número 😊. Pasame el de la otra persona.", phoneNumberId);
+    return;
+  }
+  let mensaje = "";
+  try {
+    mensaje = await redactarMensajeDeJonathan(orden.instruccion);
+  } catch (err) {
+    console.error("Error redactando el mensaje de Jonathan:", err);
+  }
+  if (!mensaje || /SIN_MENSAJE/.test(mensaje)) {
+    await enviar(jonathan, "¿Qué querés que le diga? Por ejemplo: Lindsy, escribile al 3873123456 que ya llegué y mañana lo llamo.", phoneNumberId);
+    return;
+  }
+  ordenesRecientes.set(ultimos10(orden.destino), { mensaje, ts: Date.now(), plantilla: false, falloAvisado: false });
+  if (ordenesRecientes.size > 200) ordenesRecientes.clear();
+  const ok = await enviarConResultado(orden.destino, mensaje, phoneNumberId);
+  if (!ok) {
+    await usarPlantillaPrimerMensaje(orden.destino, phoneNumberId);
+    return;
+  }
+  const h = historialesPersonal.get(orden.destino);
+  if (h?.length) h.push({ role: "assistant", content: mensaje });
+  await enviar(
+    jonathan,
+    `📤 Le mandé a +${orden.destino}:\n\n${mensaje}\n\nSi esa persona no te escribió en las últimas 24 h, WhatsApp puede rechazarlo y entonces te aviso y uso la plantilla de contacto.`,
+    phoneNumberId
+  );
+}
+// ---- Fin: mensajes de Jonathan a terceros
+
 // Asistente personal separado. Si Groq falla, nunca se deriva la consulta a Claude.
 async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
   if (!groq) {
@@ -260,6 +429,24 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
     return;
   }
 
+  if (esJonathan(numero)) {
+    const orden = leerOrdenDeJonathan(texto);
+    if (orden) {
+      await manejarOrdenDeJonathan(orden, phoneNumberId).catch((err) => console.error("Error con la orden de Jonathan:", err));
+      return;
+    }
+  }
+  const pendiente = mensajesPendientes.get(ultimos10(numero));
+  if (pendiente && Date.now() - pendiente.ts < 7 * 24 * 60 * 60 * 1000) {
+    // La persona respondió a la plantilla: ahora sí se le entrega el mensaje de Jonathan
+    mensajesPendientes.delete(ultimos10(numero));
+    await enviar(numero, pendiente.mensaje, phoneNumberId);
+    if (SOLO_SALUDO.test(texto)) {
+      historialesPersonal.set(numero, [{ role: "user", content: texto }, { role: "assistant", content: pendiente.mensaje }]);
+      return;
+    }
+    historialesPersonal.set(numero, [{ role: "assistant", content: pendiente.mensaje }]);
+  }
   const historial = historialesPersonal.get(numero) || [];
   if (historial.length === 0) {
     // Primer contacto: saludo fijo de Lindsy. Si el mensaje era solo un saludo, no hace falta más.
