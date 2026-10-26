@@ -192,7 +192,7 @@ async function reenviarAlPersonal(req) {
   // Se reintenta varias veces para que el mensaje no se pierda.
   const cuerpo = req.rawBody;
   const firma = req.get("x-hub-signature-256") || "";
-  const ESPERAS_MS = [0, 8000, 15000, 20000, 25000];
+  const ESPERAS_MS = [0, 8000, 15000, 20000, 25000, 30000, 40000, 60000, 60000, 60000];
   for (let i = 0; i < ESPERAS_MS.length; i++) {
     if (ESPERAS_MS[i]) await new Promise((ok) => setTimeout(ok, ESPERAS_MS[i]));
     try {
