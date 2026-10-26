@@ -266,7 +266,8 @@ async function avisarJonathanDesdeLindsy(numeroPersona, texto, phoneNumberId) {
 // se manda la plantilla aprobada de contacto y el mensaje queda pendiente hasta que la persona responda.
 const PLANTILLA_PRIMER_MENSAJE = process.env.LINDSY_PLANTILLA || "aviso_contacto_dueno";
 const PLANTILLA_PRIMER_MENSAJE_IDIOMA = process.env.LINDSY_PLANTILLA_IDIOMA || "es_AR";
-const ordenesRecientes = new Map(); // últimos 10 dígitos -> { mensaje, ts, plantilla, falloAvisado }
+const ordenesRecientes = new Map();
+const ordenEnEspera = { destino: null, ts: 0 }; // orden sin mensaje: el próximo texto de Jonathan es el mensaje // últimos 10 dígitos -> { mensaje, ts, plantilla, falloAvisado }
 const mensajesPendientes = new Map(); // últimos 10 dígitos -> { mensaje, ts }
 const ultimos10 = (n) => String(n || "").replace(/\D/g, "").slice(-10);
 const esJonathan = (n) => ultimos10(n).length === 10 && ultimos10(n) === ultimos10(NUMERO_AVISO_JONATHAN);
@@ -294,24 +295,44 @@ function leerOrdenDeJonathan(texto) {
   return { destino: normalizarDestino(m[0]), instruccion: t.replace(m[0], " ").replace(/\s+/g, " ").trim() };
 }
 
+function limpiarInstruccion(t) {
+  let s = String(t || "").replace(/\blindsy\b[\s,:;-]*/gi, " ").replace(/\s+/g, " ").trim();
+  s = s.replace(/^(por favor[\s,]*)?(escrib\w*|mand\w*|envi\w*|dec\w*|avis\w*|salud\w*|contact\w*)\s+(le\s+|les\s+)?(a\s+|al\s+)?(el\s+)?(n[uú]mero\s+|contacto\s+)?(de\s+)?/i, "");
+  s = s.replace(/^(y\s+)?(dec[ií]le|dile|avisale|diciendo|dici[eé]ndole)?\s*(que\s+)?/i, "");
+  return s.trim();
+}
+
 async function redactarMensajeDeJonathan(instruccion) {
-  const r = await groq.chat.completions.create({
-    model: GROQ_MODEL,
-    max_tokens: 250,
-    messages: [
-      {
-        role: "system",
-        content:
-          "Sos Lindsy, el asistente personal de Jonathan. Jonathan te pide que le escribas a una persona de su parte. " +
-          "Redactá solo el mensaje final que le vas a enviar, en español rioplatense, cálido y breve (máximo 3 líneas). " +
-          "Empezá con: Hola, soy Lindsy, el asistente personal de Jonathan. 😊 Te escribo de su parte. " +
-          "Hablá de Jonathan en tercera persona. Usá solo la información de la instrucción: no inventes datos, horarios, lugares ni promesas. " +
-          "Si la instrucción no contiene un mensaje claro para transmitir, devolvé exactamente SIN_MENSAJE. Sin comillas ni explicaciones.",
-      },
-      { role: "user", content: instruccion },
-    ],
-  });
-  return String(r.choices?.[0]?.message?.content || "").trim();
+  const limpio = limpiarInstruccion(instruccion);
+  if (limpio.length < 3) return "SIN_MENSAJE";
+  let texto = "";
+  try {
+    const r = await groq.chat.completions.create({
+      model: GROQ_MODEL,
+      max_tokens: 1500,
+      reasoning_effort: "low",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Sos Lindsy, el asistente personal de Jonathan. Jonathan te pide que le escribas a una persona de su parte. " +
+            "Redactá solo el mensaje final que le vas a enviar, en español rioplatense, cálido y breve (máximo 3 líneas). " +
+            "Empezá con: Hola, soy Lindsy, el asistente personal de Jonathan. 😊 Te escribo de su parte. " +
+            "Hablá de Jonathan en tercera persona. Corregí errores de tipeo evidentes sin cambiar el sentido. " +
+            "Usá solo la información de la instrucción: no inventes datos, horarios, lugares ni promesas. Sin comillas ni explicaciones.",
+        },
+        { role: "user", content: instruccion },
+      ],
+    });
+    texto = String(r.choices?.[0]?.message?.content || "").trim();
+  } catch (err) {
+    console.error("Groq no pudo redactar el mensaje de Jonathan:", err?.message || err);
+  }
+  if (!texto || /SIN_MENSAJE/.test(texto)) {
+    console.error("Redacción vacía o dudosa: se usa el texto de Jonathan tal cual");
+    texto = `Hola, soy Lindsy, el asistente personal de Jonathan. 😊 Te escribo de su parte. Jonathan te manda a decir: "${limpio}"`;
+  }
+  return texto;
 }
 
 async function enviarConResultado(numero, texto, phoneNumberId) {
@@ -402,7 +423,9 @@ async function manejarOrdenDeJonathan(orden, phoneNumberId) {
     console.error("Error redactando el mensaje de Jonathan:", err);
   }
   if (!mensaje || /SIN_MENSAJE/.test(mensaje)) {
-    await enviar(jonathan, "¿Qué querés que le diga? Por ejemplo: Lindsy, escribile al 3873123456 que ya llegué y mañana lo llamo.", phoneNumberId);
+    ordenEnEspera.destino = orden.destino;
+    ordenEnEspera.ts = Date.now();
+    await enviar(jonathan, `¿Qué querés que le diga a +${orden.destino}? Escribime solo el mensaje, por ejemplo: ya llegué y mañana lo llamo.`, phoneNumberId);
     return;
   }
   ordenesRecientes.set(ultimos10(orden.destino), { mensaje, ts: Date.now(), plantilla: false, falloAvisado: false });
@@ -430,8 +453,17 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
   }
 
   if (esJonathan(numero)) {
-    const orden = leerOrdenDeJonathan(texto);
+    let orden = leerOrdenDeJonathan(texto);
+    const esperando = ordenEnEspera.destino && Date.now() - ordenEnEspera.ts < 10 * 60 * 1000;
+    if (!orden && esperando) {
+      if (/^\s*(s[ií]|ok|dale|bueno|eso|por favor|s[ií],? por favor|s[ií],? eso)[\s!.,]*$/i.test(texto)) {
+        await enviar(numero, "Dale 😊 ¿Cuál es el mensaje? Escribilo y se lo mando.", phoneNumberId);
+        return;
+      }
+      orden = { destino: ordenEnEspera.destino, instruccion: texto };
+    }
     if (orden) {
+      ordenEnEspera.destino = null;
       await manejarOrdenDeJonathan(orden, phoneNumberId).catch((err) => console.error("Error con la orden de Jonathan:", err));
       return;
     }
