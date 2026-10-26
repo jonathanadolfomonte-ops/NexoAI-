@@ -230,6 +230,29 @@ app.post("/webhook", (req, res) => {
   for (const eco of ecos) manejarEco(eco);
 });
 
+// Aviso a Jonathan (su línea 084) cuando alguien pide hablar con él por Lindsy.
+// Sale desde la línea de Lindsy: WhatsApp solo lo entrega si Jonathan le escribió al 789 en las últimas 24 h.
+const NUMERO_AVISO_JONATHAN = String(OWNER_WHATSAPP_NUMBER || "5493873441084").replace(/\D/g, "");
+const avisosJonathan = new Map();
+async function avisarJonathanDesdeLindsy(numeroPersona, texto, phoneNumberId) {
+  const persona = String(numeroPersona || "").replace(/\D/g, "");
+  if (!persona || persona.slice(-10) === NUMERO_AVISO_JONATHAN.slice(-10)) return; // no avisarle a Jonathan de sí mismo
+  const ultimo = avisosJonathan.get(persona) || 0;
+  if (Date.now() - ultimo < 5 * 60 * 1000) return; // un aviso cada 5 minutos por persona
+  avisosJonathan.set(persona, Date.now());
+  if (avisosJonathan.size > 500) avisosJonathan.clear();
+  const resumen = String(texto || "").replace(/\s+/g, " ").trim().slice(0, 300);
+  const aviso =
+    `🙋 Lindsy: alguien quiere hablar con vos\n\nMensaje: "${resumen}"\n\n` +
+    `Persona: +${persona}\nEscribirle: https://wa.me/${persona}`;
+  try {
+    await enviar(NUMERO_AVISO_JONATHAN, aviso, phoneNumberId);
+    console.log("Aviso de derivación enviado a Jonathan");
+  } catch (err) {
+    console.error("No se pudo avisar a Jonathan:", err);
+  }
+}
+
 // Asistente personal separado. Si Groq falla, nunca se deriva la consulta a Claude.
 async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
   if (!groq) {
@@ -256,6 +279,7 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
     if (historial[0]?.role === "assistant") historial.shift();
     historialesPersonal.set(numero, historial);
     await enviar(numero, MENSAJE_DERIVACION, phoneNumberId);
+    await avisarJonathanDesdeLindsy(numero, texto, phoneNumberId);
     return;
   }
   historial.push({ role: "user", content: texto });
