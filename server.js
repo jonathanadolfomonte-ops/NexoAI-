@@ -52,18 +52,23 @@ const groq = GROQ_API_KEY
 const numeroPersonal = String(PERSONAL_WHATSAPP_NUMBER || "").replace(/\D/g, "");
 
 // Plantilla de conversación de Lindsy (editable en instrucciones-lindsy.md)
-const SALUDO_LINDSY =
-  "Hola 👋 Soy Lindsy, el asistente virtual de Jonathan.\n\n" +
-  "Si necesitás algo, te puedo ayudar con confianza: preguntame lo que quieras. " +
-  "Jonathan está pendiente de lo que me preguntás y de las respuestas que tengamos. 😊";
-let instruccionesLindsy;
-try {
-  instruccionesLindsy = fs.readFileSync(new URL("./instrucciones-lindsy.md", import.meta.url), "utf-8");
-} catch {
+const SALUDO_LINDSY = "¡Hola! Soy Lindsy, el asistente personal de Jonathan. 😊 ¿En qué puedo ayudarte hoy?";
+function leerArchivoLindsy(nombre) {
+  try {
+    return fs.readFileSync(new URL(`./${nombre}`, import.meta.url), "utf-8");
+  } catch {
+    return "";
+  }
+}
+// Instrucciones de Lindsy: guía de personalidad + reglas adicionales (archivos editables)
+let instruccionesLindsy = [leerArchivoLindsy("guia-personalidad-lindsy.md"), leerArchivoLindsy("instrucciones-lindsy.md")]
+  .filter(Boolean)
+  .join("\n\n---\n\n");
+if (!instruccionesLindsy) {
   instruccionesLindsy =
-    "Sos Lindsy, el asistente virtual de Jonathan. Hablás en español rioplatense, con calidez y claridad, en respuestas breves. " +
-    "Aclarás que sos un asistente virtual si te lo preguntan. No inventás datos sobre Jonathan ni prometés cosas en su nombre. " +
-    "No pedís ni aceptás claves, códigos ni datos bancarios. Si alguien quiere hablar con Jonathan, tomás nombre y motivo.";
+    "Sos Lindsy, el asistente personal de Jonathan. Hablás en español natural, con calidez y claridad, en respuestas breves. " +
+    "Si te preguntan quién sos, decís que sos Lindsy, el asistente personal de Jonathan. No inventás datos ni acciones. " +
+    "No pedís ni aceptás claves, códigos ni datos bancarios.";
 }
 const SOLO_SALUDO = /^\s*(hola|holis?|buenas?|buen[oa]s?\s+(d[ií]as?|tardes?|noches?)|hey|ey|hello|hi)(\s+lindsy)?[\s!.¡,?]*$/i;
 
