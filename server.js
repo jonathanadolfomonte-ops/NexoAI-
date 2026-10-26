@@ -302,10 +302,12 @@ function limpiarInstruccion(t) {
   return s.trim();
 }
 
+const INTRO_LINDSY = "Hola, soy Lindsy, el asistente personal de Jonathan. 😊 Te escribo de su parte.";
+
 async function redactarMensajeDeJonathan(instruccion) {
   const limpio = limpiarInstruccion(instruccion);
   if (limpio.length < 3) return "SIN_MENSAJE";
-  let texto = "";
+  let cuerpo = "";
   try {
     const r = await groq.chat.completions.create({
       model: GROQ_MODEL,
@@ -316,23 +318,26 @@ async function redactarMensajeDeJonathan(instruccion) {
           role: "system",
           content:
             "Sos Lindsy, el asistente personal de Jonathan. Jonathan te pide que le escribas a una persona de su parte. " +
-            "Redactá solo el mensaje final que le vas a enviar, en español rioplatense, cálido y breve (máximo 3 líneas). " +
-            "Empezá con: Hola, soy Lindsy, el asistente personal de Jonathan. 😊 Te escribo de su parte. " +
-            "Hablá de Jonathan en tercera persona. Corregí errores de tipeo evidentes sin cambiar el sentido. " +
-            "Usá solo la información de la instrucción: no inventes datos, horarios, lugares ni promesas. Sin comillas ni explicaciones.",
+            "Escribí SOLO el contenido del mensaje (1 o 2 frases), en español rioplatense, cálido y claro, hablando de Jonathan en tercera persona. " +
+            "No incluyas saludo ni presentación: eso ya se agrega aparte. " +
+            "Ejemplos: instrucción 'que me llame' -> 'Jonathan te pide que lo llames cuando puedas.'; " +
+            "instrucción 'que ya llegué y mañana lo llamo' -> 'Jonathan te avisa que ya llegó y que mañana te llama.'; " +
+            "instrucción 'que quiero saber cómo está' -> 'Jonathan quería saber cómo estás.' " +
+            "Corregí errores de tipeo evidentes sin cambiar el sentido. No inventes datos, horarios, lugares ni promesas. Sin comillas ni explicaciones.",
         },
         { role: "user", content: instruccion },
       ],
     });
-    texto = String(r.choices?.[0]?.message?.content || "").trim();
+    cuerpo = String(r.choices?.[0]?.message?.content || "").trim();
   } catch (err) {
     console.error("Groq no pudo redactar el mensaje de Jonathan:", err?.message || err);
   }
-  if (!texto || /SIN_MENSAJE/.test(texto)) {
-    console.error("Redacción vacía o dudosa: se usa el texto de Jonathan tal cual");
-    texto = `Hola, soy Lindsy, el asistente personal de Jonathan. 😊 Te escribo de su parte. Jonathan te manda a decir: "${limpio}"`;
+  cuerpo = cuerpo.replace(/^Hola,? soy Lindsy[^.]*\.\s*(😊\s*)?(Te escribo de su parte\.?\s*)?/i, "").trim();
+  if (cuerpo.length < 8 || /SIN_MENSAJE/.test(cuerpo)) {
+    console.error("Redacción vacía o muy corta: se usa el texto de Jonathan tal cual");
+    cuerpo = `Jonathan te manda a decir: "${limpio}"`;
   }
-  return texto;
+  return `${INTRO_LINDSY} ${cuerpo}`;
 }
 
 async function enviarConResultado(numero, texto, phoneNumberId) {
