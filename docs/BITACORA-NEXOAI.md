@@ -61,6 +61,7 @@ Variables de entorno típicas (solo nombres): `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_
 - El dueño le dice al bot "decile al cliente que..." y el bot lo transmite.
 - Registro de conversaciones en planilla de Google.
 - Pausa del bot cuando el dueño responde a mano desde la app.
+- Lindsy escribe primero por orden del dueño: el dueño le escribe "Lindsy, escribile al 3873123456 que ya llegué" desde su línea; Lindsy redacta el mensaje de su parte y lo manda. Si la persona nunca escribió (ventana de 24 h cerrada, error 131047), Lindsy manda una plantilla aprobada, guarda el mensaje como pendiente y se lo entrega apenas la persona responde. El dueño recibe aviso de cada paso.
 - Lindsy personal: guía de personalidad (`guia-personalidad-lindsy.md`), reglas adicionales (`instrucciones-lindsy.md`), saludo en el primer mensaje, derivación a Jonathan con link y aviso a su línea.
 
 ## 6. Pendientes antes de vender
@@ -82,3 +83,9 @@ Variables de entorno típicas (solo nombres): `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_
 3. Probar siempre desde **otro teléfono** distinto del dueño.
 4. Mirar los logs del servicio antes de cambiar nada.
 5. Todo cambio al bot en vivo pasa primero por una rama y luego se publica.
+
+## 8. Plantillas de Meta (estado)
+
+- `aviso_contacto_dueno` (es_AR, aprobada): "Hola, soy NexoAI… Comunícate con el número {{1}}…". Se usa hoy como apertura provisoria.
+- `lindsy_primer_contacto` (es_AR, enviada a Meta el 26/10/2026, pendiente de aprobación): presentación de Lindsy "de parte de Jonathan", sin variables. Al aprobarse, se activa cargando la variable `LINDSY_PLANTILLA=lindsy_primer_contacto` en el servicio personal y redeployando.
+- Aprendizaje: una plantilla con botón de respuesta rápida genera un mensaje de tipo "button", no "text"; el código debe contemplarlo antes de usar botones.
