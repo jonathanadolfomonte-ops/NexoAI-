@@ -89,3 +89,17 @@ Variables de entorno típicas (solo nombres): `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_
 - `aviso_contacto_dueno` (es_AR, aprobada): "Hola, soy NexoAI… Comunícate con el número {{1}}…". Se usa hoy como apertura provisoria.
 - `lindsy_primer_contacto` (es_AR, enviada a Meta el 26/10/2026, pendiente de aprobación): presentación de Lindsy "de parte de Jonathan", sin variables. Al aprobarse, se activa cargando la variable `LINDSY_PLANTILLA=lindsy_primer_contacto` en el servicio personal y redeployando.
 - Aprendizaje: una plantilla con botón de respuesta rápida genera un mensaje de tipo "button", no "text"; el código debe contemplarlo antes de usar botones.
+
+## 9. Cómo darle órdenes a Lindsy (ejemplo)
+
+Desde la línea del dueño, al número de Lindsy:
+`Lindsy, escribile al +54 9 3873 66-7546 que hace rato no hablamos y quiero saber cómo está`
+Verbo + número con código de área (sin 0 ni 15) + mensaje. Si no hay mensaje, Lindsy lo pide y usa el siguiente texto.
+
+## 10. Errores nuevos (26/10/2026)
+
+| # | Síntoma | Causa | Solución |
+|---|---------|-------|----------|
+| 14 | Lindsy pedía el mensaje aunque la orden lo incluía | El modelo de razonamiento (gpt-oss-20b) agotaba el límite de tokens pensando y devolvía vacío | Subir el límite, bajar el esfuerzo de razonamiento y usar el texto del dueño como respaldo |
+| 15 | Una respuesta suelta ("sí por favor") se trataba como charla | La orden quedaba sin memoria | Recordar la orden pendiente 10 minutos y pedir el mensaje |
+| 16 | La plantilla de contacto no se entregó a un compañero que no escribía hace semanas | Por confirmar: la plantilla está categorizada como Marketing (posible límite de Meta, error 131049) o el número no tiene WhatsApp (131026) | Se agregó registro del código de error para confirmarlo; solución probable: plantilla Utility aprobada |
