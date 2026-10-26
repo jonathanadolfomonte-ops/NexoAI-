@@ -51,6 +51,22 @@ const groq = GROQ_API_KEY
   : null;
 const numeroPersonal = String(PERSONAL_WHATSAPP_NUMBER || "").replace(/\D/g, "");
 
+// Plantilla de conversación de Lindsy (editable en instrucciones-lindsy.md)
+const SALUDO_LINDSY =
+  "Hola 👋 Soy Lindsy, el asistente virtual de Jonathan.\n\n" +
+  "Si necesitás algo, te puedo ayudar con confianza: preguntame lo que quieras. " +
+  "Jonathan está pendiente de lo que me preguntás y de las respuestas que tengamos. 😊";
+let instruccionesLindsy;
+try {
+  instruccionesLindsy = fs.readFileSync(new URL("./instrucciones-lindsy.md", import.meta.url), "utf-8");
+} catch {
+  instruccionesLindsy =
+    "Sos Lindsy, el asistente virtual de Jonathan. Hablás en español rioplatense, con calidez y claridad, en respuestas breves. " +
+    "Aclarás que sos un asistente virtual si te lo preguntan. No inventás datos sobre Jonathan ni prometés cosas en su nombre. " +
+    "No pedís ni aceptás claves, códigos ni datos bancarios. Si alguien quiere hablar con Jonathan, tomás nombre y motivo.";
+}
+const SOLO_SALUDO = /^\s*(hola|holis?|buenas?|buen[oa]s?\s+(d[ií]as?|tardes?|noches?)|hey|ey|hello|hi)(\s+lindsy)?[\s!.¡,?]*$/i;
+
 // Memoria corta de cada conversacion (se borra si el servidor se reinicia)
 const MAX_HISTORIAL = 10;
 const historiales = new Map();
@@ -205,6 +221,17 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
   }
 
   const historial = historialesPersonal.get(numero) || [];
+  if (historial.length === 0) {
+    // Primer contacto: saludo fijo de Lindsy. Si el mensaje era solo un saludo, no hace falta más.
+    await enviar(numero, SALUDO_LINDSY, phoneNumberId);
+    if (SOLO_SALUDO.test(texto)) {
+      historialesPersonal.set(numero, [
+        { role: "user", content: texto },
+        { role: "assistant", content: SALUDO_LINDSY },
+      ]);
+      return;
+    }
+  }
   historial.push({ role: "user", content: texto });
 
   try {
@@ -213,7 +240,7 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
       messages: [
         {
           role: "system",
-          content: "Sos Lindsy, un asistente personal útil, cálido, claro y directo que conversa en español rioplatense. Ayudá al propietario con consultas, ideas y proyectos. Respondé con sinceridad y de forma práctica, con pasos concretos. No afirmes ser una persona ni tener acceso directo a recursos externos. No pidas ni reveles claves o datos sensibles. Si una acción fuera del chat no fue ejecutada realmente, decilo con claridad. Preferí respuestas breves y accionables.",
+          content: instruccionesLindsy,
         },
         ...historial,
       ],
