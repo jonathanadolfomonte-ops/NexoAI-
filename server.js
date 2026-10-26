@@ -337,7 +337,7 @@ async function redactarMensajeDeJonathan(instruccion) {
     console.error("Redacción vacía o muy corta: se usa el texto de Jonathan tal cual");
     cuerpo = `Jonathan te manda a decir: "${limpio}"`;
   }
-  return `${INTRO_LINDSY} ${cuerpo}`;
+  return `${INTRO_LINDSY} ${cuerpo}\n\nPodés escribirle directamente acá: ${LINK_JONATHAN}`;
 }
 
 async function enviarConResultado(numero, texto, phoneNumberId) {
