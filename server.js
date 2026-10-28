@@ -484,6 +484,24 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
   }
 
   if (esJonathan(numero)) {
+    limpiarSolicitudesContacto();
+    const decision = texto.match(/^\\s*(si|sí|no)\\s+(\\d{4})(?:\\s+(.*))?\\s*$/i);
+    if (decision) {
+      const solicitud = solicitudesContacto.get(decision[2]);
+      if (!solicitud || solicitud.estado !== "pendiente") {
+        await enviar(numero, "No encuentro una solicitud pendiente con ese código. Pedile a la persona que vuelva a solicitar contacto.", phoneNumberId);
+        return;
+      }
+      solicitudesContacto.delete(decision[2]);
+      if (/^(si|sí)$/i.test(decision[1])) {
+        const ok = await enviar(solicitud.numero, "¡Jonathan está disponible para que le escribas! 😊 Su WhatsApp: " + LINK_JONATHAN, solicitud.phoneNumberId || phoneNumberId);
+        await enviar(numero, ok ? "Listo. WhatsApp aceptó enviar el enlace a la persona; no puedo confirmar entrega o lectura." : "No pude confirmar el envío del enlace. Revisá WhatsApp antes de darlo por hecho.", phoneNumberId);
+      } else {
+        const ok = await enviar(solicitud.numero, "Jonathan está ocupado en este momento. Ya recibió tu solicitud y te responderá cuando pueda. Gracias por esperar. 😊", solicitud.phoneNumberId || phoneNumberId);
+        await enviar(numero, ok ? "Le indiqué que estás ocupado y que ya recibiste su solicitud." : "No pude confirmar el envío de la respuesta a la persona.", phoneNumberId);
+      }
+      return;
+    }
     let orden = leerOrdenDeJonathan(texto);
     const esperando = ordenEnEspera.destino && Date.now() - ordenEnEspera.ts < 10 * 60 * 1000;
     if (!orden && esperando) {
