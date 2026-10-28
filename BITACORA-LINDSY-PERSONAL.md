@@ -140,3 +140,12 @@ Conservar esta bitácora junto al código de pruebas. Antes de ofrecer el produc
 - Estado: implementación parcial guardada en la rama aislada; todavía debe revisarse por completo y probarse con CI antes de considerar la función lista. No desplegar todavía.
 - Riesgos/pendientes: el código de cuatro dígitos puede colisionar; las solicitudes no sobreviven a reinicios; verificar que el número de Jonathan y el enlace configurado sean correctos; agregar pruebas para autorización, rechazo, expiración, notificación fallida y evitar que otra persona pueda enviar una respuesta SI/NO como si fuera Jonathan.
 - Seguridad pendiente importante: confirmar que `esJonathan(numero)` autentica realmente al dueño y no basta con que alguien escriba un texto con el formato `SI <código>`.
+
+
+### 2026-10-28 — Comandos ACEPTO/RECHAZO
+
+- Se reemplazaron los comandos SI/NO por ACEPTO y RECHAZO, con código aleatorio de seis dígitos.
+- Se añadió una prueba de integración simulada para cada camino: autorizar comparte el enlace; rechazar informa ocupación y no comparte el enlace.
+- Commits: lógica `23ff044633618dc553e345a56280090977ca343d`; aserciones `a6ead813da420cb147bbdf3b1055114de3877ba6`; pruebas de ambos caminos `db33c6f20eba5bf3dab84ac3cfc4efc20c6ddffe`.
+- Estado: pruebas añadidas, todavía no ejecutadas en CI. Sin despliegue, sin cambios en main/Meta y sin mensajes reales.
+- Limitación aceptada por el usuario: solicitudes pendientes vencen a los 30 minutos y se pierden al reiniciar el proceso.
