@@ -265,7 +265,7 @@ test("servidor real aislado: petición de aviso activa notificación al dueño y
   const ownerNumber = "5493873441084";
   const { baseUrl, logFile } = await startServer(t);
   const response = await postWebhook(baseUrl, payloadFor({
-    from: customerNumber, id: "wamid.derivacion-aviso-1", text: "Avisále que me escriba."
+    from: customerNumber, id: "wamid.derivacion-aviso-1", text: "Quiero que Jonathan me escriba."
   }));
   assert.equal(response.status, 200);
   const entries = await waitForLog(logFile, (entry) => entry.kind === "whatsapp" && entry.body?.to === customerNumber, 1);
