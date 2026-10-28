@@ -123,3 +123,20 @@ Conservar esta bitácora junto al código de pruebas. Antes de ofrecer el produc
 - Commits de esta corrección: `84d3fd99cb6ffcd367b8158e55a9587c79d5272e` (código) y `da42a1695911f78f89f5a80de52eb148aa806399` (prueba).
 - Estado: cambios guardados en `asistente-personal-groq-base-segura`; todavía falta ejecutar y revisar el workflow automatizado. No se modificó `main`, Render ni Meta.
 - Limitación: respuesta OK de la API significa que WhatsApp aceptó la solicitud, no que el mensaje se haya entregado o leído. La prueba es simulada.
+
+
+### 2026-10-28 — Flujo de autorización previa para compartir el contacto
+
+- Requisito del usuario: si una persona pide hablar con Jonathan, Lindsy debe consultarle primero y no compartir el enlace de Jonathan antes de recibir autorización.
+- Cambio en la rama aislada:
+  - Se guardan solicitudes temporales pendientes en memoria, con código de cuatro dígitos derivado del teléfono de quien consulta.
+  - Lindsy responde al contacto que consultará disponibilidad y que todavía no compartirá el enlace.
+  - Jonathan puede contestar `SI <código>` para autorizar el envío del enlace, o `NO <código> ocupado` para responder que está ocupado.
+  - Las solicitudes vencen a los 30 minutos; son memoria temporal y se pierden si el servicio reinicia.
+  - Si el aviso al dueño no es aceptado por la API, Lindsy no afirma que la consulta fue entregada.
+- Commit de la lógica inicial de solicitudes: `0a08eaf6189d87e97a3ec3acab929486d62799de`.
+- Commit del manejador de respuestas del dueño: `4868382594a37a108564f562cfd979d07907e95b`.
+- Commit de la ruta que consulta al dueño antes de responder al contacto: `0011733dc5d13307e115c1d36bad4b4bae8770f3`.
+- Estado: implementación parcial guardada en la rama aislada; todavía debe revisarse por completo y probarse con CI antes de considerar la función lista. No desplegar todavía.
+- Riesgos/pendientes: el código de cuatro dígitos puede colisionar; las solicitudes no sobreviven a reinicios; verificar que el número de Jonathan y el enlace configurado sean correctos; agregar pruebas para autorización, rechazo, expiración, notificación fallida y evitar que otra persona pueda enviar una respuesta SI/NO como si fuera Jonathan.
+- Seguridad pendiente importante: confirmar que `esJonathan(numero)` autentica realmente al dueño y no basta con que alguien escriba un texto con el formato `SI <código>`.
