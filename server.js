@@ -257,7 +257,7 @@ async function avisarJonathanDesdeLindsy(numeroPersona, texto, phoneNumberId) {
   limpiarSolicitudesContacto();
   const existente = [...solicitudesContacto.values()].find((x) => x.numero === persona && x.estado === "pendiente");
   if (existente) return { ok: true, id: existente.id, repetida: true };
-  const id = persona.slice(-4);
+  let id;\n  do { id = String(crypto.randomInt(100000, 1000000)); } while (solicitudesContacto.has(id));
   const resumen = String(texto || "").replace(/\s+/g, " ").trim().slice(0, 300);
   const nombre = nombresPorNumero.get(persona) || "";
   const solicitud = { id, numero: persona, nombre, texto: resumen, phoneNumberId, ts: Date.now(), estado: "pendiente" };
@@ -266,7 +266,7 @@ async function avisarJonathanDesdeLindsy(numeroPersona, texto, phoneNumberId) {
   const aviso =
     `🙋 Lindsy: alguien quiere hablar con vos.\n\n` +
     `Solicitud #${id}${nombre ? ` — ${nombre}` : ""}\nNúmero: +${persona}\nMensaje: "${resumen}"\n\n` +
-    `Respondé: SI ${id} para autorizar el contacto, o NO ${id} ocupado para rechazar por ahora.`;
+    `Respondé: ACEPTO ${id} para autorizar compartir tu contacto, o RECHAZO ${id} para no compartirlo por ahora.`;
   try {
     const enviado = await enviar(NUMERO_AVISO_JONATHAN, aviso, phoneNumberId);
     if (!enviado) {
@@ -485,7 +485,7 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
 
   if (esJonathan(numero)) {
     limpiarSolicitudesContacto();
-    const decision = texto.match(/^\\s*(si|sí|no)\\s+(\\d{4})(?:\\s+(.*))?\\s*$/i);
+    const decision = texto.match(/^\s*(acepto|rechazo)\s+(\d{6})\s*$/i);
     if (decision) {
       const solicitud = solicitudesContacto.get(decision[2]);
       if (!solicitud || solicitud.estado !== "pendiente") {
@@ -493,7 +493,7 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
         return;
       }
       solicitudesContacto.delete(decision[2]);
-      if (/^(si|sí)$/i.test(decision[1])) {
+      if (/^acepto$/i.test(decision[1])) {
         const ok = await enviar(solicitud.numero, "¡Jonathan está disponible para que le escribas! 😊 Su WhatsApp: " + LINK_JONATHAN, solicitud.phoneNumberId || phoneNumberId);
         await enviar(numero, ok ? "Listo. WhatsApp aceptó enviar el enlace a la persona; no puedo confirmar entrega o lectura." : "No pude confirmar el envío del enlace. Revisá WhatsApp antes de darlo por hecho.", phoneNumberId);
       } else {
