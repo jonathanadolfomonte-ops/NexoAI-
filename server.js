@@ -242,25 +242,44 @@ app.post("/webhook", (req, res) => {
 // Sale desde la línea de Lindsy: WhatsApp solo lo entrega si Jonathan le escribió al 789 en las últimas 24 h.
 const NUMERO_AVISO_JONATHAN = String(OWNER_WHATSAPP_NUMBER || "5493873441084").replace(/\D/g, "");
 const avisosJonathan = new Map();
+// Solicitudes de contacto pendientes de autorización. Son temporales y se pierden si el proceso reinicia.
+const solicitudesContacto = new Map();
+const LIMITE_SOLICITUD_MS = 30 * 60 * 1000;
+function limpiarSolicitudesContacto() {
+  const ahora = Date.now();
+  for (const [id, solicitud] of solicitudesContacto) {
+    if (ahora - solicitud.ts > LIMITE_SOLICITUD_MS) solicitudesContacto.delete(id);
+  }
+}
 async function avisarJonathanDesdeLindsy(numeroPersona, texto, phoneNumberId) {
   const persona = String(numeroPersona || "").replace(/\D/g, "");
-  if (!persona || persona.slice(-10) === NUMERO_AVISO_JONATHAN.slice(-10)) return; // no avisarle a Jonathan de sí mismo
-  const ultimo = avisosJonathan.get(persona) || 0;
-  if (Date.now() - ultimo < 5 * 60 * 1000) return true; // ya se notificó recientemente
-  if (avisosJonathan.size > 500) avisosJonathan.clear();
+  if (!persona || persona.slice(-10) === NUMERO_AVISO_JONATHAN.slice(-10)) return { ok: false };
+  limpiarSolicitudesContacto();
+  const existente = [...solicitudesContacto.values()].find((x) => x.numero === persona && x.estado === "pendiente");
+  if (existente) return { ok: true, id: existente.id, repetida: true };
+  const id = persona.slice(-4);
   const resumen = String(texto || "").replace(/\s+/g, " ").trim().slice(0, 300);
+  const nombre = nombresPorNumero.get(persona) || "";
+  const solicitud = { id, numero: persona, nombre, texto: resumen, phoneNumberId, ts: Date.now(), estado: "pendiente" };
+  solicitudesContacto.set(id, solicitud);
+  if (solicitudesContacto.size > 100) solicitudesContacto.delete(solicitudesContacto.keys().next().value);
   const aviso =
-    `🙋 Lindsy: alguien quiere hablar con vos\n\nMensaje: "${resumen}"\n\n` +
-    `Persona: +${persona}\nEscribirle: https://wa.me/${persona}`;
+    `🙋 Lindsy: alguien quiere hablar con vos.\n\n` +
+    `Solicitud #${id}${nombre ? ` — ${nombre}` : ""}\nNúmero: +${persona}\nMensaje: "${resumen}"\n\n` +
+    `Respondé: SI ${id} para autorizar el contacto, o NO ${id} ocupado para rechazar por ahora.`;
   try {
     const enviado = await enviar(NUMERO_AVISO_JONATHAN, aviso, phoneNumberId);
-    if (!enviado) return false;
+    if (!enviado) {
+      solicitudesContacto.delete(id);
+      return { ok: false, id };
+    }
     avisosJonathan.set(persona, Date.now());
-    console.log("WhatsApp aceptó el aviso de derivación a Jonathan");
-    return true;
+    console.log("WhatsApp aceptó el envío de la solicitud de contacto al dueño");
+    return { ok: true, id };
   } catch (err) {
     console.error("No se pudo avisar a Jonathan:", err);
-    return false;
+    solicitudesContacto.delete(id);
+    return { ok: false, id };
   }
 }
 
