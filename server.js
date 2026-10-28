@@ -264,10 +264,11 @@ function leerOrden(texto) {
       .trim();
 
   if (!hallado) {
-    const antes = texto.split(/\bque\b|:/i)[0].slice(0, 120);
+    // Si aparece una secuencia larga de dígitos en cualquier parte de la orden,
+    // pedir aclaración evita interpretar datos numéricos como un mensaje válido.
     return {
       destino: null,
-      invalido: /\d{5,}/.test(antes),
+      invalido: /\d{5,}/.test(texto),
       instruccion: limpiarInstruccion(texto),
     };
   }
