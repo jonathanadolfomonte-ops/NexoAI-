@@ -58,7 +58,7 @@ async function startServer(t, options = {}) {
     GROQ_API_KEY: "clave-groq-ficticia",
     PERSONAL_WHATSAPP_NUMBER: PERSONAL_NUMBER,
     PERSONAL_WHATSAPP_PHONE_NUMBER_ID: options.personalPhoneNumberId || "",
-    OWNER_WHATSAPP_NUMBER: "",
+    OWNER_WHATSAPP_NUMBER: "5493873441084",
     TEST_OUTBOUND_LOG: logFile,
     TEST_GROQ_MODE: options.groqMode || "ok",
     TEST_CLAUDE_MODE: options.claudeMode || "ok",
