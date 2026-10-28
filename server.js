@@ -488,16 +488,14 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
     historialesPersonal.set(numero, [{ role: "assistant", content: pendiente.mensaje }]);
   }
   const historial = historialesPersonal.get(numero) || [];
-  if (historial.length === 0) {
-    // Primer contacto: saludo fijo de Lindsy. Si el mensaje era solo un saludo, no hace falta más.
+  if (historial.length === 0 && SOLO_SALUDO.test(texto)) {
+    // Primer contacto con un saludo breve: presentar a Lindsy una sola vez.
     await enviar(numero, SALUDO_LINDSY, phoneNumberId);
-    if (SOLO_SALUDO.test(texto)) {
-      historialesPersonal.set(numero, [
-        { role: "user", content: texto },
-        { role: "assistant", content: SALUDO_LINDSY },
-      ]);
-      return;
-    }
+    historialesPersonal.set(numero, [
+      { role: "user", content: texto },
+      { role: "assistant", content: SALUDO_LINDSY },
+    ]);
+    return;
   }
   if (QUIERE_HABLAR_CON_JONATHAN.test(texto)) {
     // Derivación fija con link, sin pasar por el modelo
