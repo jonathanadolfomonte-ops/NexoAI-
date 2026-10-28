@@ -111,3 +111,15 @@ Para cada ejecución nueva, agregar una entrada con:
 ## Criterio para reutilización comercial
 
 Conservar esta bitácora junto al código de pruebas. Antes de ofrecer el producto a clientes, repetir las pruebas desde un commit identificado, archivar los resultados, comprobar privacidad y aislamiento por usuario, verificar el coste de infraestructura/modelo y documentar recuperación, límites y soporte. No afirmar que la aplicación está lista para producción hasta cerrar las pruebas pendientes.
+
+
+### 2026-10-28 — Corrección de derivación al dueño (rama aislada)
+
+- Evidencia de usuario: captura donde el contacto escribió «Avisále que me escriba» y Lindsy respondió que ya había dejado el mensaje, sin prueba de envío.
+- Hallazgo: la frase no estaba contemplada de forma explícita en el detector de derivación; podía llegar al modelo y producir una promesa no ejecutada.
+- Cambio en `server.js`: se agregó una ruta explícita para peticiones de aviso/contacto. El sistema intenta notificar al dueño antes de responder al contacto.
+- `enviar()` ahora devuelve `true` cuando la API acepta el mensaje y `false` cuando el envío falla; la notificación solo se registra como aceptada después de respuesta OK. El mensaje al contacto distingue envío aceptado de entrega/lectura confirmada.
+- Prueba agregada en `tests/server-real.integration.test.js`: usa números ficticios y un interceptor de red para comprobar el intento de aviso al dueño y la respuesta condicional. No envía mensajes reales.
+- Commits de esta corrección: `84d3fd99cb6ffcd367b8158e55a9587c79d5272e` (código) y `da42a1695911f78f89f5a80de52eb148aa806399` (prueba).
+- Estado: cambios guardados en `asistente-personal-groq-base-segura`; todavía falta ejecutar y revisar el workflow automatizado. No se modificó `main`, Render ni Meta.
+- Limitación: respuesta OK de la API significa que WhatsApp aceptó la solicitud, no que el mensaje se haya entregado o leído. La prueba es simulada.
