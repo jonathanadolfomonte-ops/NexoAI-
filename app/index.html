@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Moda Florencia</title>
+<meta name="description" content="Catálogo de ropa de niños, talles 4 al 14. Consultá por WhatsApp.">
+<meta name="theme-color" content="#c4166f">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="icon" href="/app/icon-192.png">
+<link rel="apple-touch-icon" href="/app/icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: catálogo de ropa de niños en tarjetas con bandas de color reales; talles 4 a 14 como regla; compra directa por WhatsApp. */
+:root {
+  --bg: #fff6f9;
+  --surface: #ffffff;
+  --fg: #2a1830;
+  --muted: #6e5a76;
+  --line: #f0d9e4;
+  --accent: #c4166f;
+  --accent-ink: #ffffff;
+  --soft: #f3e6fb;
+  --wa: #168a4a;
+  --wa-ink: #ffffff;
+  --font-display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1020; --surface: #271833; --fg: #f8eaf3; --muted: #bba6c6;
+    --line: #3d2a4a; --accent: #ff5fae; --accent-ink: #2a0f1d; --soft: #33204a;
+    --wa: #3ddc84; --wa-ink: #07281a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1b1020; --surface: #271833; --fg: #f8eaf3; --muted: #bba6c6;
+  --line: #3d2a4a; --accent: #ff5fae; --accent-ink: #2a0f1d; --soft: #33204a;
+  --wa: #3ddc84; --wa-ink: #07281a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 40px;
+}
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.08; margin: 0; text-wrap: balance; }
+a { color: inherit; }
+.wrap { max-width: 1080px; margin: 0 auto; }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 18px; flex-wrap: wrap; }
+.brand { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; letter-spacing: -0.01em; text-decoration: none; }
+.brand span { color: var(--accent); }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 10px 20px; border-radius: 999px; border: 0;
+  font: 700 0.95rem var(--font-body); text-decoration: none; cursor: pointer;
+}
+.btn-wa { background: var(--wa); color: var(--wa-ink); }
+.btn-line { background: transparent; color: var(--fg); border: 2px solid var(--fg); }
+
+.hero { display: grid; grid-template-columns: 1.15fr 1fr; gap: 32px; align-items: center; padding-block: 28px 36px; }
+.hero > * { min-width: 0; }
+.eyebrow { font-weight: 700; font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
+.hero h1 { font-size: clamp(2.2rem, 6.4vw, 4rem); font-weight: 800; letter-spacing: -0.02em; }
+.hero p.lead { font-size: 1.1rem; color: var(--muted); max-width: 46ch; margin: 18px 0 24px; }
+.cta-row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.ruler { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px 20px 18px; }
+.ruler h2 { font-size: 1rem; font-weight: 800; letter-spacing: 0.01em; margin-bottom: 4px; }
+.ruler p { margin: 0 0 16px; color: var(--muted); font-size: 0.92rem; }
+.ticks { display: grid; grid-template-columns: repeat(11, 1fr); gap: 4px; align-items: end; }
+.tick { text-align: center; font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; }
+.tick i { display: block; width: 100%; border-radius: 6px 6px 0 0; background: var(--accent); margin-bottom: 6px; }
+.tick span { font-size: 0.95rem; }
+.ruler small { display: block; margin-top: 12px; color: var(--muted); font-size: 0.85rem; }
+
+.section-head { display: flex; align-items: end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin: 24px 0 18px; }
+.section-head h2 { font-size: clamp(1.6rem, 4vw, 2.3rem); font-weight: 800; }
+.section-head p { margin: 0; color: var(--muted); max-width: 44ch; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.swatch img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.swatch .tag { position:relative; }
+.install { display:none; }
+.swatch { height: 220px; display: flex; align-items: flex-end; padding: 12px; position: relative; }
+.swatch .tag { background: var(--surface); color: var(--fg); font-weight: 700; font-size: 0.78rem; padding: 4px 10px; border-radius: 999px; }
+.card .body { padding: 16px 16px 18px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.card h3 { font-size: 1.18rem; font-weight: 800; }
+.card .desc { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.dots { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.dots li { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; padding: 3px 10px 3px 4px; border-radius: 999px; background: var(--soft); }
+.dots b { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(0,0,0,.18); display: inline-block; }
+.card .foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+.card .foot span { font-size: 0.85rem; font-weight: 700; color: var(--muted); }
+.card .foot a { min-height: 40px; padding: 8px 16px; font-size: 0.88rem; }
+
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; margin-top: 8px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+.step h3 { font-size: 1.05rem; margin-bottom: 6px; }
+.step p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+
+.info { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px; margin-top: 28px; }
+.info div { background: var(--soft); border-radius: 16px; padding: 16px 18px; }
+.info strong { display: block; font-family: var(--font-display); font-size: 1.02rem; margin-bottom: 2px; }
+.info span { color: var(--muted); font-size: 0.93rem; }
+
+.soon { margin-top: 28px; border: 2px dashed var(--accent); border-radius: 20px; padding: 20px 22px; display: flex; gap: 12px 24px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.soon h3 { font-size: 1.3rem; }
+.soon p { margin: 4px 0 0; color: var(--muted); }
+
+footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+footer > * { min-width: 0; }
+footer h3 { font-size: 1.05rem; margin-bottom: 8px; }
+footer p { margin: 0 0 6px; color: var(--muted); }
+.num { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.num code { font: 700 1rem var(--font-body); color: var(--fg); user-select: all; }
+.copy { font: 600 0.8rem var(--font-body); background: var(--soft); color: var(--fg); border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.fine { font-size: 0.8rem; color: var(--muted); width: 100%; }
+
+@media (max-width: 760px) {
+  .hero { grid-template-columns: 1fr; gap: 22px; }
+  .swatch { height: 200px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card { transition: transform .18s ease, box-shadow .18s ease; }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(120, 30, 90, .14); }
+}
+</style></head><body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#inicio">Moda <span>Florencia</span></a>
+    <button class="btn btn-line install" id="instalar" type="button">Instalar app</button>
+    <a class="btn btn-wa" href="https://wa.me/5493873441084?text=Hola!%20Quiero%20consultar%20por%20ropa%20de%20Moda%20Florencia" target="_blank" rel="noopener">Escribinos por WhatsApp</a>
+  </header>
+
+  <main id="inicio">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Ropa de niños · Tartagal, Salta</p>
+        <h1>Ropa cómoda y linda para nenas y nenes, del talle 4 al 14.</h1>
+        <p class="lead">Remeras, palazos, calzas, joggings y vestidos en telas suaves para usar todos los días. Elegí en el catálogo y consultá el precio y el talle por WhatsApp.</p>
+        <div class="cta-row">
+          <a class="btn btn-wa" href="https://wa.me/5493873441084?text=Hola!%20Quiero%20ver%20la%20ropa%20de%20Moda%20Florencia" target="_blank" rel="noopener">Consultar por WhatsApp</a>
+          <a class="btn btn-line" href="#catalogo">Ver el catálogo</a>
+        </div>
+      </div>
+      <aside class="ruler" aria-label="Talles disponibles">
+        <h2>Todas las prendas vienen del 4 al 14</h2>
+        <p>Decinos la edad o el talle del chico y te recomendamos.</p>
+        <div class="ticks" aria-hidden="true">
+          <div class="tick"><i style="height:28px"></i><span>4</span></div>
+          <div class="tick"><i style="height:36px"></i><span>5</span></div>
+          <div class="tick"><i style="height:44px"></i><span>6</span></div>
+          <div class="tick"><i style="height:52px"></i><span>7</span></div>
+          <div class="tick"><i style="height:60px"></i><span>8</span></div>
+          <div class="tick"><i style="height:68px"></i><span>9</span></div>
+          <div class="tick"><i style="height:76px"></i><span>10</span></div>
+          <div class="tick"><i style="height:84px"></i><span>11</span></div>
+          <div class="tick"><i style="height:92px"></i><span>12</span></div>
+          <div class="tick"><i style="height:100px"></i><span>13</span></div>
+          <div class="tick"><i style="height:108px"></i><span>14</span></div>
+        </div>
+        <small>Talles del 4 al 14. El stock de cada talle y color se confirma por WhatsApp.</small>
+      </aside>
+    </section>
+
+    <section id="catalogo">
+      <div class="section-head">
+        <h2>Catálogo</h2>
+        <p>Nueve prendas con sus colores. Tocá "Consultar precio" en la que te guste y te respondemos por WhatsApp.</p>
+      </div>
+      <div class="grid" id="grid"></div>
+      <div class="info">
+        <div><strong>Pagos</strong><span>Efectivo, transferencia o QR.</span></div>
+        <div><strong>Entrega en la ciudad</strong><span>Sin costo. Coordinamos hora y punto de encuentro.</span></div>
+        <div><strong>Retiro en el local</strong><span>Sin costo y sin descuento.</span></div>
+        <div><strong>Alrededores</strong><span>Se coordina directamente por WhatsApp.</span></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Cómo comprar</h2></div>
+      <div class="steps">
+        <div class="step"><h3>Elegí la prenda</h3><p>Mirá el catálogo y fijate en los colores que hay de cada una.</p></div>
+        <div class="step"><h3>Consultá por WhatsApp</h3><p>Pasanos el talle o la edad. Te confirmamos precio, color y stock, y podemos mandarte fotos.</p></div>
+        <div class="step"><h3>Coordinamos la entrega</h3><p>Retirás en el local o te lo llevamos dentro de la ciudad.</p></div>
+      </div>
+    </section>
+
+    <section class="soon">
+      <div>
+        <h3>El calzado de niños está por llegar</h3>
+        <p>Escribinos y te avisamos cuando esté disponible.</p>
+      </div>
+      <a class="btn btn-line" href="https://wa.me/5493873441084?text=Hola!%20Quiero%20que%20me%20avisen%20cuando%20llegue%20el%20calzado%20de%20ni%C3%B1os" target="_blank" rel="noopener">Quiero que me avisen</a>
+    </section>
+  </main>
+
+  <footer>
+    <div>
+      <h3>Atención personal por WhatsApp</h3>
+      <p class="num"><code>+54 9 3873 44-1084</code><button class="copy" type="button" data-copy="+5493873441084">Copiar número</button></p>
+    </div>
+    <div>
+      <h3>Asistente virtual NexoAI</h3>
+      <p>Respuestas automáticas sobre las prendas, a cualquier hora.</p>
+      <p class="num"><code>+54 9 3873 55-9322</code><button class="copy" type="button" data-copy="+5493873559322">Copiar número</button></p>
+      <p><a href="https://wa.me/5493873559322?text=Hola" target="_blank" rel="noopener">Abrir el chat con el asistente</a></p>
+    </div>
+    <p class="fine">Moda Florencia · Tartagal, Salta, Argentina. Los precios se consultan por WhatsApp. Sitio creado con NexoAI.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var C = {
+    rosaClaro: ["Rosa claro", "#f7c6d9"], lila: ["Lila", "#b9a0e6"], negroGlitter: ["Negro glitter", "#1e1b22"],
+    fucsia: ["Fucsia", "#d61f82"], celeste: ["Celeste", "#8ec9ee"], marron: ["Marrón", "#7a4b34"],
+    negro: ["Negro", "#1e1b22"], rosaViejo: ["Rosa viejo", "#c98a9b"], verdeMilitar: ["Verde militar", "#5e6b3a"],
+    gris: ["Gris", "#9a9aa0"], camel: ["Camel", "#c19a6b"], blanco: ["Blanco", "#ffffff"],
+    violeta: ["Violeta", "#7a3fb8"], rosa: ["Rosa", "#f29bbb"]
+  };
+  var FOTOS={"Conjunto Scuba Glitter": "conjunto-scuba-glitter", "Palazo Hawai": "palazo-hawai", "Jogging rústico": "jogging-rustico", "Remera lisa con volados": "remera-lisa-volados", "Remera rayada con volado": "remera-rayada-volado", "Short de bengalina": "short-bengalina", "Calza oxford lisa": "calza-oxford", "Palazo rústico": "palazo-rustico", "Vestido rayado con voladitos": "vestido-rayado-voladitos"};
+  var items = [
+    { n: "Conjunto Scuba Glitter", d: "Remera y palazo en un solo conjunto, con brillo.", t: "Nena", c: ["rosaClaro", "lila", "negroGlitter", "fucsia"] },
+    { n: "Palazo Hawai", d: "Palazo de nena para el día a día.", t: "Nena", c: ["negro", "lila", "celeste", "marron"] },
+    { n: "Jogging rústico", d: "De algodón, abrigado y cómodo.", t: "Nena", c: ["negro", "lila", "fucsia"] },
+    { n: "Remera lisa con volados", d: "Remera de morley lisa con volados.", t: "Nena", c: ["rosaViejo", "fucsia", "marron", "negro", "verdeMilitar"] },
+    { n: "Remera rayada con volado", d: "Remera de morley rayada con volado.", t: "Nena", c: ["blanco", "negro", "camel", "lila", "rosa", "celeste"], stripes: true },
+    { n: "Short de bengalina", d: "Tela elástica, cómoda y resistente. Cintura elástica con cordón.", t: "Nene", c: ["gris", "verdeMilitar", "negro"] },
+    { n: "Calza oxford lisa", d: "Calza de morley lisa.", t: "Nena", c: ["fucsia", "rosaViejo", "verdeMilitar", "marron", "negro"] },
+    { n: "Palazo rústico", d: "Tela rústica suave, cómodo y liviano. Ideal para todos los días.", t: "Nena", c: ["negro", "fucsia", "violeta"] },
+    { n: "Vestido rayado con voladitos", d: "Vestido de morley rayado con voladitos.", t: "Nena", c: ["rosa", "celeste", "blanco", "negro", "camel"], stripes: true }
+  ];
+  function band(keys, stripes) {
+    var w = 100 / keys.length, parts = [];
+    keys.forEach(function (k, i) { parts.push(C[k][1] + " " + (i * w) + "% " + ((i + 1) * w) + "%"); });
+    var g = "linear-gradient(90deg," + parts.join(",") + ")";
+    return stripes ? "repeating-linear-gradient(90deg,rgba(255,255,255,.0) 0 14px,rgba(255,255,255,.28) 14px 22px)," + g : g;
+  }
+  var grid = document.getElementById("grid");
+  items.forEach(function (it) {
+    var msg = encodeURIComponent("Hola! Quiero consultar el precio y los talles de: " + it.n);
+    var dots = it.c.map(function (k) { return '<li><b style="background:' + C[k][1] + '"></b>' + C[k][0] + "</li>"; }).join("");
+    var el = document.createElement("article");
+    el.className = "card";
+    el.innerHTML =
+      '<div class="swatch" style="background:' + band(it.c, it.stripes) + '">' + (FOTOS[it.n] ? '<img src="/fotos/' + FOTOS[it.n] + '.jpg" alt="' + it.n + '" loading="lazy" onerror="this.remove()">' : '') + '<span class="tag">' + it.t + "</span></div>" +
+      '<div class="body"><h3>' + it.n + '</h3><p class="desc">' + it.d + "</p>" +
+      '<ul class="dots" aria-label="Colores">' + dots + "</ul>" +
+      '<div class="foot"><span>Talles 4 al 14</span><a class="btn btn-wa" target="_blank" rel="noopener" href="https://wa.me/5493873441084?text=' + msg + '">Consultar precio</a></div></div>';
+    grid.appendChild(el);
+  });
+  document.querySelectorAll(".copy").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var v = b.getAttribute("data-copy"), old = b.textContent;
+      function ok() { b.textContent = "Copiado"; setTimeout(function () { b.textContent = old; }, 1600); }
+      try { navigator.clipboard.writeText(v).then(ok, function () { b.textContent = v; }); } catch (e) { b.textContent = v; }
+    });
+  });
+})();
+</script>
+<script>
+(function(){
+  if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/app/sw.js",{scope:"/app/"}).catch(function(){});});}
+  var ev=null,b=document.getElementById("instalar");
+  window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();ev=e;b.style.display="inline-flex";});
+  b.addEventListener("click",function(){if(!ev)return;ev.prompt();ev.userChoice.finally(function(){ev=null;b.style.display="none";});});
+  window.addEventListener("appinstalled",function(){b.style.display="none";});
+})();
+</script>
+</body></html>
