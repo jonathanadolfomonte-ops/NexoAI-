@@ -263,9 +263,10 @@ test("servidor real aislado: un mensaje duplicado no genera una segunda respuest
 test("servidor real aislado: petición de aviso activa notificación al dueño y respuesta veraz", async (t) => {
   const customerNumber = "5493815550777";
   const ownerNumber = "5493873441084";
-  const { baseUrl, logFile } = await startServer(t);
+  const personalPhoneId = "PHONE_ID_AVISO_FICTICIO";
+  const { baseUrl, logFile } = await startServer(t, { personalPhoneNumberId: personalPhoneId });
   const response = await postWebhook(baseUrl, payloadFor({
-    from: customerNumber, id: "wamid.derivacion-aviso-1", text: "Quiero que Jonathan me escriba."
+    from: customerNumber, id: "wamid.derivacion-aviso-1", text: "Quiero que Jonathan me escriba.", phoneNumberId: personalPhoneId
   }));
   assert.equal(response.status, 200);
   const entries = await waitForLog(logFile, (entry) => entry.kind === "whatsapp" && entry.body?.to === customerNumber, 1);
