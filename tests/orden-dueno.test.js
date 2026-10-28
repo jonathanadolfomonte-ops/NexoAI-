@@ -51,3 +51,22 @@ test("permite una orden sin número cuando se usará el último contacto avisado
   assert.equal(r.invalido, false);
   assert.match(r.instruccion, /estoy en una reunión/i);
 });
+
+test("rechaza una secuencia larga de dígitos aunque aparezca después de 'que'", () => {
+  const r = leerOrden("Decile que mi código de referencia es 123456 y que luego te llamo");
+  assert.equal(r.destino, null);
+  assert.equal(r.invalido, true);
+});
+
+test("no inventa un destino cuando la instrucción contiene una fecha", () => {
+  const r = leerOrden("Decile que la fecha del turno es 2026-10-28");
+  assert.equal(r.destino, null);
+  assert.equal(r.invalido, true);
+});
+
+test("limpia el comando y conserva el mensaje cuando no se indica número", () => {
+  const r = leerOrden("Avisale que ya estoy llegando");
+  assert.equal(r.destino, null);
+  assert.equal(r.invalido, false);
+  assert.match(r.instruccion, /ya estoy llegando/i);
+});
