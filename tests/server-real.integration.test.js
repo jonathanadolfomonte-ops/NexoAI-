@@ -277,7 +277,8 @@ test("servidor real aislado: petición de aviso activa notificación al dueño y
   assert.match(ownerNotice.body.text.body, /RECHAZO \d{6}/);
   assert.match(ownerNotice.body.text.body, new RegExp(customerNumber));
   const customerReply = entries.find((entry) => entry.kind === "whatsapp" && entry.body?.to === customerNumber);
-  assert.match(customerReply.body.text.body, /aceptó el envío del aviso/i);
+  assert.match(customerReply.body.text.body, /Ya le envié tu solicitud/i);
+  assert.match(customerReply.body.text.body, /todavía no te comparto su enlace/i);
   assert.equal(entries.some((entry) => entry.kind === "BLOCKED_UNEXPECTED_URL"), false);
 });
 
