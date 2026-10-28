@@ -260,6 +260,24 @@ test("servidor real aislado: un mensaje duplicado no genera una segunda respuest
   assert.equal(entries.filter((entry) => entry.kind === "whatsapp").length, 1);
 });
 
+test("servidor real aislado: petición de aviso activa notificación al dueño y respuesta veraz", async (t) => {
+  const customerNumber = "5493815550777";
+  const ownerNumber = "5493873441084";
+  const { baseUrl, logFile } = await startServer(t);
+  const response = await postWebhook(baseUrl, payloadFor({
+    from: customerNumber, id: "wamid.derivacion-aviso-1", text: "Avisále que me escriba."
+  }));
+  assert.equal(response.status, 200);
+  const entries = await waitForLog(logFile, (entry) => entry.kind === "whatsapp" && entry.body?.to === customerNumber, 1);
+  const ownerNotice = entries.find((entry) => entry.kind === "whatsapp" && entry.body?.to === ownerNumber);
+  assert.ok(ownerNotice, "debe intentarse el envío del aviso al 084");
+  assert.match(ownerNotice.body.text.body, /alguien quiere hablar con vos/i);
+  assert.match(ownerNotice.body.text.body, new RegExp(customerNumber));
+  const customerReply = entries.find((entry) => entry.kind === "whatsapp" && entry.body?.to === customerNumber);
+  assert.match(customerReply.body.text.body, /aceptó el envío del aviso/i);
+  assert.equal(entries.some((entry) => entry.kind === "BLOCKED_UNEXPECTED_URL"), false);
+});
+
 test("servidor real aislado: si Groq falla, no recurre a Claude y la salida sigue simulada", async (t) => {
   const { baseUrl, logFile } = await startServer(t, { groqMode: "error" });
   const response = await postWebhook(baseUrl, payloadFor({
