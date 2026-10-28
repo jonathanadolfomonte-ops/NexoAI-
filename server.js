@@ -257,7 +257,8 @@ async function avisarJonathanDesdeLindsy(numeroPersona, texto, phoneNumberId) {
   limpiarSolicitudesContacto();
   const existente = [...solicitudesContacto.values()].find((x) => x.numero === persona && x.estado === "pendiente");
   if (existente) return { ok: true, id: existente.id, repetida: true };
-  let id;\n  do { id = String(crypto.randomInt(100000, 1000000)); } while (solicitudesContacto.has(id));
+  let id;
+  do { id = String(crypto.randomInt(100000, 1000000)); } while (solicitudesContacto.has(id));
   const resumen = String(texto || "").replace(/\s+/g, " ").trim().slice(0, 300);
   const nombre = nombresPorNumero.get(persona) || "";
   const solicitud = { id, numero: persona, nombre, texto: resumen, phoneNumberId, ts: Date.now(), estado: "pendiente" };
