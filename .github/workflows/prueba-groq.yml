@@ -1,22 +1,29 @@
-name: Prueba aislada de Groq
+name: Validación aislada de NexoAI Personal
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - asistente-personal-groq-base-segura
+    paths:
+      - '**.js'
+      - '**.json'
+      - 'tests/**'
+      - '.github/workflows/prueba-groq.yml'
 
 permissions:
   contents: read
 
 jobs:
-  probar-groq:
-    name: Verificar conexión con Groq
+  pruebas:
+    name: Ejecutar suite automatizada
     runs-on: ubuntu-latest
-    environment: groq-test
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Descargar el código de esta rama
+      - name: Descargar la rama aislada
         uses: actions/checkout@v4
         with:
-          ref: asistente-personal-groq-seguro
+          ref: asistente-personal-groq-base-segura
 
       - name: Preparar Node.js
         uses: actions/setup-node@v4
@@ -26,8 +33,5 @@ jobs:
       - name: Instalar dependencias
         run: npm install --no-audit --no-fund
 
-      - name: Probar la API de Groq
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GROQ_MODEL: ${{ vars.GROQ_MODEL }}
-        run: node test-groq.js
+      - name: Ejecutar todas las pruebas
+        run: npm test
