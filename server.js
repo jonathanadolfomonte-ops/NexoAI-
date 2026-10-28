@@ -538,26 +538,16 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
     ]);
     return;
   }
-  if (QUIERE_QUE_JONATHAN_CONTACTE.test(texto)) {
-    const avisoAceptado = await avisarJonathanDesdeLindsy(numero, texto, phoneNumberId);
-    const respuesta = avisoAceptado
-      ? "Listo 😊 WhatsApp aceptó el envío del aviso a Jonathan. La entrega final depende de WhatsApp y no puedo confirmar que ya lo haya leído."
-      : "Quise avisarle a Jonathan, pero no pude confirmar el envío del aviso ahora. Para asegurarte, escribile directamente por WhatsApp: " + LINK_JONATHAN;
+  if (QUIERE_QUE_JONATHAN_CONTACTE.test(texto) || QUIERE_HABLAR_CON_JONATHAN.test(texto)) {
+    const solicitud = await avisarJonathanDesdeLindsy(numero, texto, phoneNumberId);
+    const respuesta = solicitud?.ok
+      ? "Claro 😊 Primero voy a consultar si Jonathan está disponible. Ya le envié tu solicitud; todavía no te comparto su enlace de contacto. Te aviso cuando me responda."
+      : "Quise consultar a Jonathan, pero no pude confirmar que el aviso se haya enviado. Por ahora no voy a compartir su contacto sin autorización. Intentá de nuevo más tarde, por favor.";
     historial.push({ role: "user", content: texto }, { role: "assistant", content: respuesta });
     while (historial.length > MAX_HISTORIAL) historial.shift();
     if (historial[0]?.role === "assistant") historial.shift();
     historialesPersonal.set(numero, historial);
     await enviar(numero, respuesta, phoneNumberId);
-    return;
-  }
-  if (QUIERE_HABLAR_CON_JONATHAN.test(texto)) {
-    // Derivación fija con link, sin pasar por el modelo
-    historial.push({ role: "user", content: texto }, { role: "assistant", content: MENSAJE_DERIVACION });
-    while (historial.length > MAX_HISTORIAL) historial.shift();
-    if (historial[0]?.role === "assistant") historial.shift();
-    historialesPersonal.set(numero, historial);
-    await enviar(numero, MENSAJE_DERIVACION, phoneNumberId);
-    await avisarJonathanDesdeLindsy(numero, texto, phoneNumberId);
     return;
   }
   historial.push({ role: "user", content: texto });
