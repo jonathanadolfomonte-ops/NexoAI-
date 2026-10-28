@@ -95,6 +95,16 @@ app.use(
 
 app.get("/", (_req, res) => res.send("NexoAI WhatsApp activo"));
 app.use("/fotos", express.static(carpetaFotos, { maxAge: "7d" }));
+// App instalable (PWA) de Moda Florencia: /app
+app.use(
+  "/app",
+  express.static(new URL("./app", import.meta.url).pathname, {
+    maxAge: "1h",
+    setHeaders: (res, ruta) => {
+      if (ruta.endsWith("sw.js") || ruta.endsWith("index.html")) res.setHeader("Cache-Control", "no-cache");
+    },
+  })
+);
 
 // ---- Registro en planilla (inicio)
 // Guarda cada conversacion en una planilla de Google (via Apps Script).
