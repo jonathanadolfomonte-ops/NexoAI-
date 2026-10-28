@@ -280,6 +280,36 @@ test("servidor real aislado: petición de aviso activa notificación al dueño y
   assert.equal(entries.some((entry) => entry.kind === "BLOCKED_UNEXPECTED_URL"), false);
 });
 
+test("servidor real aislado: ACEPTO autoriza compartir el contacto", async (t) => {
+  const customerNumber = "5493815550778";
+  const ownerNumber = "5493873441084";
+  const personalPhoneId = "PHONE_ID_AUTORIZACION_FICTICIO";
+  const { baseUrl, logFile } = await startServer(t, { personalPhoneNumberId: personalPhoneId });
+  await postWebhook(baseUrl, payloadFor({ from: customerNumber, id: "wamid.autoriza-solicitud", text: "Quiero hablar con Jonathan", phoneNumberId: personalPhoneId }));
+  const first = await waitForLog(logFile, (entry) => entry.kind === "whatsapp" && entry.body?.to === ownerNumber);
+  const notice = first.find((entry) => entry.kind === "whatsapp" && entry.body?.to === ownerNumber);
+  const code = notice.body.text.body.match(/Solicitud #(\d{6})/)?.[1];
+  assert.ok(code, "el aviso debe tener un código de seis dígitos");
+  await postWebhook(baseUrl, payloadFor({ from: ownerNumber, id: "wamid.autoriza-comando", text: "ACEPTO " + code, phoneNumberId: personalPhoneId }));
+  const after = await waitForLog(logFile, (entry) => entry.kind === "whatsapp" && entry.body?.to === customerNumber && /Su WhatsApp/.test(entry.body.text.body));
+  assert.match(after.find((entry) => entry.body?.to === customerNumber && /Su WhatsApp/.test(entry.body.text.body)).body.text.body, /wa\.me/);
+});
+
+test("servidor real aislado: RECHAZO no comparte el enlace", async (t) => {
+  const customerNumber = "5493815550779";
+  const ownerNumber = "5493873441084";
+  const personalPhoneId = "PHONE_ID_RECHAZO_FICTICIO";
+  const { baseUrl, logFile } = await startServer(t, { personalPhoneNumberId: personalPhoneId });
+  await postWebhook(baseUrl, payloadFor({ from: customerNumber, id: "wamid.rechazo-solicitud", text: "Quiero hablar con Jonathan", phoneNumberId: personalPhoneId }));
+  const first = await waitForLog(logFile, (entry) => entry.kind === "whatsapp" && entry.body?.to === ownerNumber);
+  const notice = first.find((entry) => entry.kind === "whatsapp" && entry.body?.to === ownerNumber);
+  const code = notice.body.text.body.match(/Solicitud #(\d{6})/)?.[1];
+  assert.ok(code, "el aviso debe tener un código de seis dígitos");
+  await postWebhook(baseUrl, payloadFor({ from: ownerNumber, id: "wamid.rechazo-comando", text: "RECHAZO " + code, phoneNumberId: personalPhoneId }));
+  const after = await waitForLog(logFile, (entry) => entry.kind === "whatsapp" && entry.body?.to === customerNumber && /Jonathan está ocupado/.test(entry.body.text.body));
+  assert.match(after.find((entry) => entry.body?.to === customerNumber && /Jonathan está ocupado/.test(entry.body.text.body)).body.text.body, /ocupado/i);
+  assert.equal(after.some((entry) => entry.body?.to === customerNumber && /Su WhatsApp/.test(entry.body.text.body)), false);
+});
 test("servidor real aislado: si Groq falla, no recurre a Claude y la salida sigue simulada", async (t) => {
   const { baseUrl, logFile } = await startServer(t, { groqMode: "error" });
   const response = await postWebhook(baseUrl, payloadFor({
