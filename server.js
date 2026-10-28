@@ -76,6 +76,7 @@ const MENSAJE_DERIVACION =
   "¡Claro! 😊 Si querés hablar directamente con Jonathan, escribile por acá:\n" +
   LINK_JONATHAN +
   "\n\nÉl te responde apenas pueda.";
+const QUIERE_QUE_JONATHAN_CONTACTE = /(?:avis[aá]le|avis[aá]|dec[ií]le|decile|ped[ií]le|pedile)[^.?!]{0,60}(?:que\s+)?(?:Jonathan\s+)?(?:me\s+)?(?:escriba|contacte|llame|mande\s+mensaje)|(?:quiero|necesito)\s+que\s+Jonathan\s+(?:me\s+)?(?:escriba|contacte|llame)/i;
 const QUIERE_HABLAR_CON_JONATHAN = new RegExp(
   "(hablar|comunicar|contactar|escribir|contacto|pasame|pasá|derivame|llamar|ver)[^.?!]{0,40}(jonathan|jona\\b|due[ñn]o|humano|persona real|una persona|alguien real)" +
     "|(jonathan|due[ñn]o)[^.?!]{0,30}(hablar|contactar|n[uú]mero|whatsapp|contacto)" +
@@ -245,18 +246,21 @@ async function avisarJonathanDesdeLindsy(numeroPersona, texto, phoneNumberId) {
   const persona = String(numeroPersona || "").replace(/\D/g, "");
   if (!persona || persona.slice(-10) === NUMERO_AVISO_JONATHAN.slice(-10)) return; // no avisarle a Jonathan de sí mismo
   const ultimo = avisosJonathan.get(persona) || 0;
-  if (Date.now() - ultimo < 5 * 60 * 1000) return; // un aviso cada 5 minutos por persona
-  avisosJonathan.set(persona, Date.now());
+  if (Date.now() - ultimo < 5 * 60 * 1000) return true; // ya se notificó recientemente
   if (avisosJonathan.size > 500) avisosJonathan.clear();
   const resumen = String(texto || "").replace(/\s+/g, " ").trim().slice(0, 300);
   const aviso =
     `🙋 Lindsy: alguien quiere hablar con vos\n\nMensaje: "${resumen}"\n\n` +
     `Persona: +${persona}\nEscribirle: https://wa.me/${persona}`;
   try {
-    await enviar(NUMERO_AVISO_JONATHAN, aviso, phoneNumberId);
-    console.log("Aviso de derivación enviado a Jonathan");
+    const enviado = await enviar(NUMERO_AVISO_JONATHAN, aviso, phoneNumberId);
+    if (!enviado) return false;
+    avisosJonathan.set(persona, Date.now());
+    console.log("WhatsApp aceptó el aviso de derivación a Jonathan");
+    return true;
   } catch (err) {
     console.error("No se pudo avisar a Jonathan:", err);
+    return false;
   }
 }
 
@@ -495,6 +499,18 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
       { role: "user", content: texto },
       { role: "assistant", content: SALUDO_LINDSY },
     ]);
+    return;
+  }
+  if (QUIERE_QUE_JONATHAN_CONTACTE.test(texto)) {
+    const avisoAceptado = await avisarJonathanDesdeLindsy(numero, texto, phoneNumberId);
+    const respuesta = avisoAceptado
+      ? "Listo 😊 WhatsApp aceptó el envío del aviso a Jonathan. La entrega final depende de WhatsApp y no puedo confirmar que ya lo haya leído."
+      : "Quise avisarle a Jonathan, pero no pude confirmar el envío del aviso ahora. Para asegurarte, escribile directamente por WhatsApp: " + LINK_JONATHAN;
+    historial.push({ role: "user", content: texto }, { role: "assistant", content: respuesta });
+    while (historial.length > MAX_HISTORIAL) historial.shift();
+    if (historial[0]?.role === "assistant") historial.shift();
+    historialesPersonal.set(numero, historial);
+    await enviar(numero, respuesta, phoneNumberId);
     return;
   }
   if (QUIERE_HABLAR_CON_JONATHAN.test(texto)) {
@@ -751,12 +767,13 @@ async function enviar(numero, texto, phoneNumberId = ID_TELEFONO_PREDETERMINADO)
         if (enviadosPorBot.size > 2000) enviadosPorBot.clear();
       }
       console.log(`Mensaje enviado a ${destino}${destino !== numero ? ` (formato alternativo; Meta lo recibio como ${numero})` : ""}`);
-      return;
+      return true;
     }
     const cuerpo = await r.text();
     console.error(`Error enviando a WhatsApp (destino ${destino}):`, r.status, cuerpo);
-    if (!cuerpo.includes("131030")) return; // otro error: no tiene sentido probar otros formatos
+    if (!cuerpo.includes("131030")) return false; // otro error: no tiene sentido probar otros formatos
   }
+  return false;
 }
 
 app.listen(PORT, () => console.log(`NexoAI WhatsApp escuchando en el puerto ${PORT}`));
