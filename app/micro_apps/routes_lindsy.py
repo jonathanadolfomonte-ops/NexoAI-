@@ -28,8 +28,9 @@ class BookingRequest(BaseModel):
 async def booking_page(request: Request) -> HTMLResponse:
     """Render the booking form."""
     return templates.TemplateResponse(
-        "lindsy/booking.html",
-        {"request": request, "title": "Reservas · Lindsy"},
+        request=request,
+        name="lindsy/booking.html",
+        context={"title": "Reservas · Lindsy"},
     )
 
 
