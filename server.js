@@ -12,7 +12,16 @@ import {
   detectarNegocio,
   esComandoMenu,
   directiva,
+  UNICO,
+  NEGOCIOS,
 } from "./menu.js";
+import { carpetaCliente } from "./config.js";
+
+// Archivos propios del cliente (clientes/<CLIENTE>/...); si no existen, se usan los de la raiz
+function rutaCliente(nombre) {
+  const propia = carpetaCliente + nombre;
+  return fs.existsSync(propia) ? propia : fileURLToPath(new URL(`./${nombre}`, import.meta.url));
+}
 
 const {
   PORT = 3000,
@@ -47,14 +56,11 @@ if (faltan.length) {
   process.exit(1);
 }
 
-const instrucciones = fs.readFileSync(
-  new URL("./instrucciones-negocio.md", import.meta.url),
-  "utf-8"
-);
+const instrucciones = fs.readFileSync(rutaCliente("instrucciones-negocio.md"), "utf-8");
 const claude = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 // Fotos de las prendas (carpeta fotos/): el modelo pide una con la marca [[FOTO]] clave
-const carpetaFotos = fileURLToPath(new URL("./fotos/", import.meta.url));
+const carpetaFotos = rutaCliente("fotos");
 let fotosDisponibles = new Set();
 try {
   fotosDisponibles = new Set(
@@ -111,7 +117,7 @@ app.use("/fotos", express.static(carpetaFotos, { maxAge: "7d" }));
 // App instalable (PWA) de Moda Florencia: /app
 app.use(
   "/app",
-  express.static(new URL("./app", import.meta.url).pathname, {
+  express.static(rutaCliente("app"), {
     maxAge: "1h",
     setHeaders: (res, ruta) => {
       if (ruta.endsWith("sw.js") || ruta.endsWith("index.html")) res.setHeader("Cache-Control", "no-cache");
@@ -541,9 +547,18 @@ async function procesar(m) {
   }
   estado.ultimo = Date.now();
 
+  // Cliente con un solo negocio: no hay menu, solo el saludo la primera vez
+  if (UNICO && !estado.negocio) {
+    estado.negocio = NEGOCIOS[0].id;
+    if (esNuevo) {
+      registrarEnPlanilla({ numero, texto: textoDe(m), respuesta: SALUDO, estado: "Saludo" });
+      await enviar(numero, SALUDO);
+    }
+  }
+
   let textoParaClaude = m.text.body;
 
-  if (estado.negocio && esComandoMenu(m.text.body)) {
+  if (!UNICO && estado.negocio && esComandoMenu(m.text.body)) {
     estado.negocio = null;
     estado.esperando = true;
     historiales.delete(numero);
