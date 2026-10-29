@@ -94,6 +94,19 @@ app.use(
 );
 
 app.get("/", (_req, res) => res.send("NexoAI WhatsApp activo"));
+// Chequeo de salud (sirve para monitoreo y para mantener despierto el servicio)
+app.get("/health", (_req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()) }));
+
+// Limite de pedidos al webhook: evita abuso (Meta manda pocos pedidos por minuto)
+const pedidosPorIp = new Map();
+setInterval(() => pedidosPorIp.clear(), 60_000).unref();
+app.use("/webhook", (req, res, next) => {
+  const ip = req.get("x-forwarded-for")?.split(",")[0].trim() || req.ip;
+  const n = (pedidosPorIp.get(ip) || 0) + 1;
+  pedidosPorIp.set(ip, n);
+  if (n > 600) return res.sendStatus(429);
+  next();
+});
 app.use("/fotos", express.static(carpetaFotos, { maxAge: "7d" }));
 // App instalable (PWA) de Moda Florencia: /app
 app.use(
@@ -150,9 +163,21 @@ async function registrarEnPlanilla({ numero, texto, respuesta, estado }) {
         estado,
       }),
     });
-    if (!r.ok) console.error("Planilla: respuesta inesperada", r.status);
+    if (!r.ok) throw new Error("respuesta " + r.status);
   } catch (err) {
-    console.error("Error guardando en la planilla:", err);
+    console.error("Planilla: fallo, reintentando una vez:", err.message);
+    try {
+      await new Promise((ok) => setTimeout(ok, 2500));
+      const r2 = await fetch(WEBHOOK_PLANILLA_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        redirect: "follow",
+        body: JSON.stringify({ clave: PLANILLA_CLAVE, fecha: fechaArgentina(), numero, nombre: nombresPorNumero.get(numero) || "", texto, respuesta, estado }),
+      });
+      if (!r2.ok) console.error("Planilla: el reintento tambien fallo", r2.status);
+    } catch (err2) {
+      console.error("Error guardando en la planilla:", err2.message);
+    }
   }
 }
 // ---- Registro en planilla (fin)
