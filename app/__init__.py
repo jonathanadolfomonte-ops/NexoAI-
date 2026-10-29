@@ -1,0 +1,1 @@
+"""NexoAI FastAPI application package."""
