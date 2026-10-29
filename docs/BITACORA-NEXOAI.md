@@ -107,3 +107,18 @@ Verbo + número con código de área (sin 0 ni 15) + mensaje. Si no hay mensaje,
 | 17 | El reenvío del 789 a Lindsy fallaba con 502 durante minutos y el mensaje se perdía | Render no despierta un servicio dormido con un POST (responde 502 al instante); con un GET sí, y tarda unos 20 a 60 s | Despertar primero al servicio destino con un GET (con espera larga) y recién después reenviar el POST con reintentos. Solución de fondo: plan que no se duerme |
 | 18 | Lindsy mandaba solo el saludo, sin el pedido del dueño | El modelo omitía el contenido | El modelo escribe solo el cuerpo y el código agrega la presentación; si el cuerpo sale corto se usa el texto original |
 | 19 | Meta rechaza botones con link directo a WhatsApp en plantillas | Política de Meta ("No se permiten los enlaces directos a WhatsApp en los botones") | Poner el número del dueño en el texto de la plantilla (`lindsy_contacto_numero`, pendiente de aprobación) |
+
+## 11. App instalable (PWA) y estado de lanzamiento (28/10/2026)
+
+**App instalable:** carpeta `app/` servida por `server.js` en `/app` (manifest, service worker, iconos, catalogo con fotos de `/fotos`). Se instala desde Chrome o Samsung Internet en cualquier Android (en iPhone, Safari > Compartir > Agregar a inicio). Los botones de WhatsApp apuntan al bot (+54 9 3873 55-9322), no a la linea humana. Probada por Jonathan en su Motorola: funciona.
+Para replicar en otro negocio: copiar `app/`, cambiar nombre, colores, catalogo, fotos y numero del bot.
+
+**Endurecimiento hecho:** `/health` (monitoreo y despertador), limite de 600 pedidos/min por IP al webhook (429), reintento de la planilla (el 500 fue un error aislado de Google).
+
+**Lista antes de cobrar (pendiente):**
+1. Cargar tarjeta en Render (dashboard.render.com/billing). Bloquea los dos puntos siguientes (error 402).
+2. Servicio en plan Starter (~US$7/mes) para que no se duerma. Provisorio gratis: monitor de UptimeRobot a `/health` cada 5 min.
+3. Postgres basico (~US$6/mes, region ohio) para no perder conversaciones ni mensajes pendientes al reiniciar. Codigo con respaldo en memoria, probarlo antes de publicar.
+4. Configuracion por cliente (un archivo por negocio en vez de datos en el codigo).
+5. Verificar el negocio en Meta.
+6. Precio, contrato y soporte. Piloto de 30 dias con el primer cliente.
