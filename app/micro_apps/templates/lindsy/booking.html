@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#6d4aff">
+  <title>{{ title }}</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, -apple-system, sans-serif; }
+    body { margin: 0; background: #f7f5ff; color: #211b35; }
+    main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+    .card { background: white; border: 1px solid #e7e0ff; border-radius: 20px; padding: 24px; box-shadow: 0 12px 35px #34206d12; }
+    h1 { margin: 0 0 8px; font-size: 1.7rem; }
+    .intro, .note { color: #655d79; line-height: 1.5; }
+    label { display: block; margin-top: 16px; font-weight: 650; }
+    input, textarea { box-sizing: border-box; display: block; width: 100%; margin-top: 6px; padding: 12px; border: 1px solid #d9d2ea; border-radius: 10px; font: inherit; }
+    button { width: 100%; margin-top: 20px; padding: 13px; border: 0; border-radius: 12px; background: #6d4aff; color: white; font: inherit; font-weight: 700; }
+    #result { margin-top: 16px; white-space: pre-wrap; }
+    .note { font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>Reservas con Lindsy 💜</h1>
+      <p class="intro">Completá los datos para probar el formulario de solicitud de reserva.</p>
+      <form id="booking-form">
+        <label for="name">Nombre</label>
+        <input id="name" name="name" required maxlength="100" autocomplete="name">
+        <label for="contact">Teléfono o medio de contacto</label>
+        <input id="contact" name="contact" required maxlength="100" autocomplete="tel">
+        <label for="service">Servicio solicitado</label>
+        <input id="service" name="service" required maxlength="120" placeholder="Ej.: consulta o turno">
+        <label for="preferred_date">Fecha preferida</label>
+        <input id="preferred_date" name="preferred_date" required maxlength="40" placeholder="Ej.: 15/11 por la tarde">
+        <label for="notes">Notas (opcional)</label>
+        <textarea id="notes" name="notes" rows="3" maxlength="1000"></textarea>
+        <button type="submit">Validar solicitud de prueba</button>
+      </form>
+      <p class="note">Prototipo experimental: esta prueba no guarda reservas ni envía mensajes a WhatsApp.</p>
+      <div id="result" role="status" aria-live="polite"></div>
+    </section>
+  </main>
+  <script>
+    const form = document.querySelector('#booking-form');
+    const result = document.querySelector('#result');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      result.textContent = 'Validando…';
+      const payload = Object.fromEntries(new FormData(form).entries());
+      try {
+        const response = await fetch('/lindsy/booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail ? JSON.stringify(data.detail) : 'No se pudo validar la solicitud.');
+        result.textContent = data.message;
+      } catch (error) {
+        result.textContent = 'No se pudo conectar con el servidor. Revisá que la aplicación esté ejecutándose.';
+      }
+    });
+  </script>
+</body>
+</html>
