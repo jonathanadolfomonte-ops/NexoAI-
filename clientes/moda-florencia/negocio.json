@@ -1,0 +1,17 @@
+{
+  "saludo": "¡Hola! Soy NexoAI, el asistente virtual de Moda Florencia y Kiosco Mayra. ¿En qué te puedo ayudar?",
+  "negocios": [
+    {
+      "id": "florencia",
+      "nombre": "Moda Florencia",
+      "descripcion": "ropa y calzado de niños",
+      "palabras": "moda|florencia|ropa|ropita|calzados?|zapatillas?|zapatos?|botas?|ojotas?|sandalias?|remeras?|pantalon(es)?|camperas?|buzos?|vestidos?|conjuntos?|talles?|nenes?|nenas?|ninos?|ninas?|bebes?"
+    },
+    {
+      "id": "mayra",
+      "nombre": "Kiosco Mayra",
+      "descripcion": "almacén, bebidas, golosinas, verduras, panificados y pollería",
+      "palabras": "kiosco|kiosko|mayra|almacen|mercaderia|bebidas?|gaseosas?|coca|cervezas?|jugos?|sodas?|golosinas?|chocolates?|alfajor(es)?|verduras?|panificados?|pan|panes|facturas?|pollo|polleria|arroz|fideos|harina|aceite|azucar|yerba"
+    }
+  ]
+}
