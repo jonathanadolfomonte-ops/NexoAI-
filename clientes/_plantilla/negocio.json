@@ -1,0 +1,11 @@
+{
+  "saludo": "¡Hola! Soy NexoAI, el asistente virtual de NOMBRE DEL NEGOCIO. ¿En qué te puedo ayudar?",
+  "negocios": [
+    {
+      "id": "mi-negocio",
+      "nombre": "NOMBRE DEL NEGOCIO",
+      "descripcion": "que vende, en pocas palabras",
+      "palabras": "palabra1|palabra2|producto3s?|marca"
+    }
+  ]
+}
