@@ -4,6 +4,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
@@ -48,7 +49,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             textSize = 15f
             gravity = Gravity.CENTER
             setPadding(0, 12, 0, 24)
-            liveRegion = TextView.ACCESSIBILITY_LIVE_REGION_POLITE
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
 
         speakButton = Button(this).apply {
