@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   android:
-    name: Build Android packages
+    name: Build and validate Android packages
     runs-on: ubuntu-latest
     env:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -38,6 +38,14 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"
+
+      - name: Run Android unit-test task
+        run: gradle --no-daemon :app:testDebugUnitTest
+        working-directory: mobile/android
+
+      - name: Run Android Lint
+        run: gradle --no-daemon :app:lintDebug
+        working-directory: mobile/android
 
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
