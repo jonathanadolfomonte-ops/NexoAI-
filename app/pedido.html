@@ -155,6 +155,7 @@ footer p { margin: 0 0 6px; color: var(--muted); }
 <label for="color">Color</label><select id="color"></select>
 <div class="row2"><div><label for="talle">Talle</label><select id="talle"></select></div><div><label for="cant">Cantidad</label><input id="cant" type="number" inputmode="numeric" min="1" max="20" value="1"></div></div>
 <button class="btn btn-line" type="submit" style="width:100%;margin-top:16px">Agregar al pedido</button>
+<a class="btn btn-wa" id="vermi" href="/app/compra.html" style="width:100%;margin-top:10px">Ver mi compra</a>
 <div class="err" id="err" role="alert"></div>
 </form>
 <section class="calc" style="margin-top:16px" aria-live="polite">
@@ -210,7 +211,7 @@ footer p { margin: 0 0 6px; color: var(--muted); }
       b.type="button";b.className="mini";b.textContent="Quitar";b.addEventListener("click",function(){pedido.splice(i,1);guardar();dibujar();});
       li.appendChild(d);li.appendChild(b);lista.appendChild(li);
     });
-    var hay=pedido.length>0;vacio.hidden=hay;wa.hidden=!hay;vaciar.hidden=!hay;
+    var hay=pedido.length>0;var uu=pedido.reduce(function(s,x){return s+x.q},0);$("vermi").textContent=uu>0?"Ver mi compra ("+uu+")":"Ver mi compra";vacio.hidden=hay;wa.hidden=!hay;vaciar.hidden=!hay;
     if(hay)wa.href="https://wa.me/"+BOT+"?text="+encodeURIComponent(mensaje(pedido));
   }
   $("f").addEventListener("submit",function(ev){
