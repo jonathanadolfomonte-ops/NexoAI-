@@ -10,9 +10,9 @@ Primera base nativa de Android, independiente del servidor comercial de NexoAI.
 - Botón de prueba que utiliza el motor de texto a voz instalado en el dispositivo.
 - Saludo en español de Argentina cuando el motor ofrece esa variante; usa español genérico como alternativa.
 - Cierre explícito del motor de voz al salir de la pantalla.
-- Compilación automática del APK de prueba mediante GitHub Actions.
+- CI compila el APK Debug y puede compilar un APK Release firmado cuando se configuran los secretos privados descritos en [SECURITY-AND-SIGNING.md](SECURITY-AND-SIGNING.md).
 
-## Límites deliberados de esta primera versión
+## Límites deliberados
 
 - Todavía no solicita permiso de micrófono ni escucha audio.
 - No se conecta a Render ni a proveedores de IA.
@@ -28,12 +28,8 @@ Desde esta carpeta, con Java 17, Android SDK y Gradle 8.7:
 gradle :app:assembleDebug
 ```
 
-El APK de depuración se genera en:
-
-`app/build/outputs/apk/debug/app-debug.apk`
-
-En GitHub, el workflow **Lindsy Android build** compila esta app y publica el APK como artefacto cuando termina correctamente.
+Para distribución, consultar [SECURITY-AND-SIGNING.md](SECURITY-AND-SIGNING.md). Un APK Debug no debe confundirse con un paquete Release firmado.
 
 ## Próxima etapa
 
-Probar instalación y voz en el Motorola y en la tablet. Después de validar esta base, agregar reconocimiento de voz con permiso contextual y una sesión visible iniciada por el usuario.
+Completar la custodia de la clave de firma, producir y verificar el APK Release, y probar instalación y voz en el Motorola y en la tablet. Después de validar esta base, agregar reconocimiento de voz con permiso contextual y una sesión visible iniciada por el usuario.
