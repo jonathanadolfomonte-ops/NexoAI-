@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Calculadora de talle · Moda Florencia</title>
+<meta name="theme-color" content="#c4166f">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="icon" href="/app/icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: catálogo de ropa de niños en tarjetas con bandas de color reales; talles 4 a 14 como regla; compra directa por WhatsApp. */
+:root {
+  --bg: #fff6f9;
+  --surface: #ffffff;
+  --fg: #2a1830;
+  --muted: #6e5a76;
+  --line: #f0d9e4;
+  --accent: #c4166f;
+  --accent-ink: #ffffff;
+  --soft: #f3e6fb;
+  --wa: #168a4a;
+  --wa-ink: #ffffff;
+  --font-display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1020; --surface: #271833; --fg: #f8eaf3; --muted: #bba6c6;
+    --line: #3d2a4a; --accent: #ff5fae; --accent-ink: #2a0f1d; --soft: #33204a;
+    --wa: #3ddc84; --wa-ink: #07281a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1b1020; --surface: #271833; --fg: #f8eaf3; --muted: #bba6c6;
+  --line: #3d2a4a; --accent: #ff5fae; --accent-ink: #2a0f1d; --soft: #33204a;
+  --wa: #3ddc84; --wa-ink: #07281a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 40px;
+}
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.08; margin: 0; text-wrap: balance; }
+a { color: inherit; }
+.wrap { max-width: 1080px; margin: 0 auto; }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 18px; flex-wrap: wrap; }
+.brand { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; letter-spacing: -0.01em; text-decoration: none; }
+.brand span { color: var(--accent); }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 10px 20px; border-radius: 999px; border: 0;
+  font: 700 0.95rem var(--font-body); text-decoration: none; cursor: pointer;
+}
+.btn-wa { background: var(--wa); color: var(--wa-ink); }
+.btn-line { background: transparent; color: var(--fg); border: 2px solid var(--fg); }
+
+.hero { display: grid; grid-template-columns: 1.15fr 1fr; gap: 32px; align-items: center; padding-block: 28px 36px; }
+.hero > * { min-width: 0; }
+.eyebrow { font-weight: 700; font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
+.hero h1 { font-size: clamp(2.2rem, 6.4vw, 4rem); font-weight: 800; letter-spacing: -0.02em; }
+.hero p.lead { font-size: 1.1rem; color: var(--muted); max-width: 46ch; margin: 18px 0 24px; }
+.cta-row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.ruler { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px 20px 18px; }
+.ruler h2 { font-size: 1rem; font-weight: 800; letter-spacing: 0.01em; margin-bottom: 4px; }
+.ruler p { margin: 0 0 16px; color: var(--muted); font-size: 0.92rem; }
+.ticks { display: grid; grid-template-columns: repeat(11, 1fr); gap: 4px; align-items: end; }
+.tick { text-align: center; font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; }
+.tick i { display: block; width: 100%; border-radius: 6px 6px 0 0; background: var(--accent); margin-bottom: 6px; }
+.tick span { font-size: 0.95rem; }
+.ruler small { display: block; margin-top: 12px; color: var(--muted); font-size: 0.85rem; }
+
+.section-head { display: flex; align-items: end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin: 24px 0 18px; }
+.section-head h2 { font-size: clamp(1.6rem, 4vw, 2.3rem); font-weight: 800; }
+.section-head p { margin: 0; color: var(--muted); max-width: 44ch; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.swatch img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.swatch .tag { position:relative; }
+.install { display:none; }
+.swatch { height: 220px; display: flex; align-items: flex-end; padding: 12px; position: relative; }
+.swatch .tag { background: var(--surface); color: var(--fg); font-weight: 700; font-size: 0.78rem; padding: 4px 10px; border-radius: 999px; }
+.card .body { padding: 16px 16px 18px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.card h3 { font-size: 1.18rem; font-weight: 800; }
+.card .desc { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.dots { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.dots li { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; padding: 3px 10px 3px 4px; border-radius: 999px; background: var(--soft); }
+.dots b { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(0,0,0,.18); display: inline-block; }
+.card .foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+.card .foot span { font-size: 0.85rem; font-weight: 700; color: var(--muted); }
+.card .foot a { min-height: 40px; padding: 8px 16px; font-size: 0.88rem; }
+
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; margin-top: 8px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+.step h3 { font-size: 1.05rem; margin-bottom: 6px; }
+.step p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+
+.info { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px; margin-top: 28px; }
+.info div { background: var(--soft); border-radius: 16px; padding: 16px 18px; }
+.info strong { display: block; font-family: var(--font-display); font-size: 1.02rem; margin-bottom: 2px; }
+.info span { color: var(--muted); font-size: 0.93rem; }
+
+.soon { margin-top: 28px; border: 2px dashed var(--accent); border-radius: 20px; padding: 20px 22px; display: flex; gap: 12px 24px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.soon h3 { font-size: 1.3rem; }
+.soon p { margin: 4px 0 0; color: var(--muted); }
+
+footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+footer > * { min-width: 0; }
+footer h3 { font-size: 1.05rem; margin-bottom: 8px; }
+footer p { margin: 0 0 6px; color: var(--muted); }
+.num { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.num code { font: 700 1rem var(--font-body); color: var(--fg); user-select: all; }
+.copy { font: 600 0.8rem var(--font-body); background: var(--soft); color: var(--fg); border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.fine { font-size: 0.8rem; color: var(--muted); width: 100%; }
+
+@media (max-width: 760px) {
+  .hero { grid-template-columns: 1fr; gap: 22px; }
+  .swatch { height: 200px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card { transition: transform .18s ease, box-shadow .18s ease; }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(120, 30, 90, .14); }
+}
+</style>
+<style>
+.calc{max-width:560px;margin:8px auto 0;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:22px 20px}
+.calc label{display:block;font-weight:700;margin:14px 0 6px}
+.calc input,.calc select{width:100%;min-height:48px;font:500 1.05rem var(--font-body);padding:10px 14px;border-radius:12px;border:2px solid var(--line);background:var(--bg);color:var(--fg)}
+.calc input:focus,.calc select:focus{outline:3px solid var(--accent);outline-offset:2px}
+.res{margin-top:20px;padding:18px;border-radius:16px;background:var(--soft);text-align:center}
+.res .big{font:800 3.4rem/1 var(--font-display);color:var(--accent)}
+.res p{margin:8px 0 0;color:var(--muted)}
+.err{color:#b3261e;font-weight:700;margin-top:10px}
+</style></head><body>
+<div class="wrap">
+<header class="top"><a class="brand" href="/app/">Moda <span>Florencia</span></a><a class="btn btn-line" href="/app/">Volver al catálogo</a></header>
+<main>
+<section class="section-head"><h2>¿Qué talle le corresponde?</h2><p>Poné la edad o la altura del chico y te decimos el talle. Es una guía: el talle final lo confirmamos por WhatsApp.</p></section>
+<form class="calc" id="f" novalidate>
+<label for="modo">Quiero calcular por</label>
+<select id="modo"><option value="edad">Edad</option><option value="altura">Altura</option></select>
+<label for="v" id="et">Edad en años (de 3 a 15)</label>
+<input id="v" type="number" inputmode="decimal" min="0" step="1" placeholder="Ej: 8" autocomplete="off">
+<div class="err" id="err" role="alert"></div>
+<div class="res" id="res" hidden aria-live="polite"><div>Talle recomendado</div><div class="big" id="t"></div><p id="n"></p>
+<div class="cta-row" style="justify-content:center;margin-top:14px"><a class="btn btn-wa" id="wa" target="_blank" rel="noopener" href="#">Consultar este talle por WhatsApp</a></div></div>
+</form>
+<p class="fine" style="margin-top:14px;text-align:center">Todas las prendas vienen del talle 4 al 14. Si está entre dos talles, conviene el más grande.</p>
+</main></div>
+<script>
+(function(){
+  var BOT="5493873559322";
+  var ALT=[[4,100,107],[5,107,113],[6,113,119],[7,119,125],[8,125,131],[9,131,137],[10,137,143],[11,143,149],[12,149,155],[13,155,161],[14,161,167]];
+  var modo=document.getElementById("modo"),v=document.getElementById("v"),et=document.getElementById("et"),err=document.getElementById("err"),res=document.getElementById("res"),t=document.getElementById("t"),n=document.getElementById("n"),wa=document.getElementById("wa");
+  function setModo(){var a=modo.value==="altura";et.textContent=a?"Altura en centímetros (de 85 a 175)":"Edad en años (de 3 a 15)";v.placeholder=a?"Ej: 128":"Ej: 8";v.step=a?"1":"1";v.value="";res.hidden=true;err.textContent="";}
+  function calcular(){
+    err.textContent="";var x=parseFloat(String(v.value).replace(",","."));
+    if(!isFinite(x)){res.hidden=true;return;}
+    var a=modo.value==="altura",talle,nota="";
+    if(a){
+      if(x<85||x>175){res.hidden=true;err.textContent="Poné una altura entre 85 y 175 cm.";return;}
+      if(x<100){talle=4;nota="Es más chico que el talle 4, el menor que tenemos. Consultanos.";}
+      else if(x>=167){talle=14;nota="Es el talle más grande que tenemos. Consultanos.";}
+      else{for(var i=0;i<ALT.length;i++){if(x>=ALT[i][1]&&x<ALT[i][2]){talle=ALT[i][0];break;}}nota="Para "+Math.round(x)+" cm. Si está justo en el borde, elegí el talle siguiente.";}
+    } else {
+      if(x<3||x>15){res.hidden=true;err.textContent="Poné una edad entre 3 y 15 años.";return;}
+      var e=Math.floor(x);talle=Math.min(14,Math.max(4,e));
+      nota=e<4?"Es más chico que el talle 4, el menor que tenemos. Consultanos.":e>14?"Es el talle más grande que tenemos. Consultanos.":"Para "+e+" años. Si es alto o robusto para su edad, elegí el siguiente.";
+    }
+    t.textContent=talle;n.textContent=nota;
+    wa.href="https://wa.me/"+BOT+"?text="+encodeURIComponent("Hola! Quiero consultar ropa en talle "+talle+".");
+    res.hidden=false;
+  }
+  modo.addEventListener("change",setModo);v.addEventListener("input",calcular);
+  document.getElementById("f").addEventListener("submit",function(ev){ev.preventDefault();calcular();});
+})();
+</script></body></html>
