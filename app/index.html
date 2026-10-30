@@ -147,6 +147,7 @@ footer p { margin: 0 0 6px; color: var(--muted); }
           <a class="btn btn-line" href="#catalogo">Ver el catálogo</a>
           <a class="btn btn-line" href="/app/talle.html">¿Qué talle es?</a>
           <a class="btn btn-line" href="/app/pedido.html">Armá tu pedido</a>
+          <a class="btn btn-line" id="vermi" href="/app/compra.html">Ver mi compra</a>
         </div>
       </div>
       <aside class="ruler" aria-label="Talles disponibles">
@@ -273,5 +274,8 @@ footer p { margin: 0 0 6px; color: var(--muted); }
   b.addEventListener("click",function(){if(!ev)return;ev.prompt();ev.userChoice.finally(function(){ev=null;b.style.display="none";});});
   window.addEventListener("appinstalled",function(){b.style.display="none";});
 })();
+</script>
+<script>
+(function(){try{var g=JSON.parse(localStorage.getItem("mf-pedido")||"[]"),u=0;if(Array.isArray(g))g.forEach(function(x){if(x&&x.q>=1&&x.q<=20)u+=x.q;});var e=document.getElementById("vermi");if(e&&u>0)e.textContent="Ver mi compra ("+u+")";}catch(e){}})();
 </script>
 </body></html>
