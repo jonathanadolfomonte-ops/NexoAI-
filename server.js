@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { manejarAgenda } from "./agenda.js";
 
 const {
   PORT = 3000,
@@ -535,6 +536,11 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
         const ok = await enviar(solicitud.numero, "Jonathan está ocupado en este momento. Ya recibió tu solicitud y te responderá cuando pueda. Gracias por esperar. 😊", solicitud.phoneNumberId || phoneNumberId);
         await enviar(numero, ok ? "Le indiqué que estás ocupado y que ya recibiste su solicitud." : "No pude confirmar el envío de la respuesta a la persona.", phoneNumberId);
       }
+      return;
+    }
+    const respAgenda = manejarAgenda(texto);
+    if (respAgenda) {
+      await enviar(numero, respAgenda, phoneNumberId);
       return;
     }
     let orden = leerOrdenDeJonathan(texto);
