@@ -4,6 +4,7 @@ import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { manejarAgenda } from "./agenda.js";
+import { enviarNotaDeVoz, vozActiva } from "./voz.js";
 
 const {
   PORT = 3000,
@@ -506,6 +507,18 @@ async function transcribirAudio(mediaId) {
   return texto;
 }
 
+// Si la persona escribió por audio, responde con nota de voz (si hay voz configurada); si falla, manda texto.
+async function responder(numero, texto, phoneNumberId, comoAudio) {
+  if (comoAudio && vozActiva()) {
+    try {
+      if (await enviarNotaDeVoz({ numero, texto, phoneNumberId, token: WHATSAPP_TOKEN, apiVersion: WHATSAPP_API_VERSION })) return;
+    } catch (err) {
+      console.error("No pude mandar la nota de voz, va por texto:", err.message);
+    }
+  }
+  await enviar(numero, texto, phoneNumberId);
+}
+
 async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEFONO_PREDETERMINADO, desdeAudio = false) {
   if (!groq) {
     await enviar(numero, "El asistente personal todavía no está activado. Falta configurar GROQ_API_KEY. La atención habitual de NexoAI permanece separada.", phoneNumberId);
@@ -540,7 +553,7 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
     }
     const respAgenda = manejarAgenda(texto);
     if (respAgenda) {
-      await enviar(numero, respAgenda, phoneNumberId);
+      await responder(numero, respAgenda, phoneNumberId, desdeAudio);
       return;
     }
     let orden = leerOrdenDeJonathan(texto);
@@ -612,7 +625,7 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
     while (historial.length > MAX_HISTORIAL) historial.shift();
     if (historial[0]?.role === "assistant") historial.shift();
     historialesPersonal.set(numero, historial);
-    await enviar(numero, respuesta, phoneNumberId);
+    await responder(numero, respuesta, phoneNumberId, desdeAudio);
   } catch (err) {
     console.error("Error con Groq para asistencia personal:", err);
     historial.pop();
