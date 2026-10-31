@@ -478,7 +478,34 @@ async function manejarOrdenDeJonathan(orden, phoneNumberId) {
 // ---- Fin: mensajes de Jonathan a terceros
 
 // Asistente personal separado. Si Groq falla, nunca se deriva la consulta a Claude.
-async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
+const MAX_AUDIO_BYTES = 1_500_000;
+
+// Descarga el audio de WhatsApp y lo transcribe con Whisper (Groq). Devuelve el texto o lanza Error con .aviso amigable.
+async function transcribirAudio(mediaId) {
+  const falla = (aviso, msg) => Object.assign(new Error(msg || aviso), { aviso });
+  const auth = { Authorization: `Bearer ${WHATSAPP_TOKEN}` };
+  const meta = await fetch(`https://graph.facebook.com/${WHATSAPP_API_VERSION}/${encodeURIComponent(mediaId)}`, { headers: auth });
+  if (!meta.ok) throw falla("No pude abrir tu audio. ¿Me lo escribís?", `media meta ${meta.status}`);
+  const info = await meta.json();
+  if (info.file_size && info.file_size > MAX_AUDIO_BYTES) throw falla("Tu audio es muy largo para mí. ¿Me lo mandás más corto (hasta 1 minuto) o por escrito?", "audio grande");
+  if (!/^https:\/\/[^/]*(fbcdn\.net|facebook\.com|whatsapp\.net|fbsbx\.com)\//i.test(String(info.url || ""))) throw falla("No pude abrir tu audio. ¿Me lo escribís?", "url de media inesperada");
+  const bin = await fetch(info.url, { headers: auth });
+  if (!bin.ok) throw falla("No pude descargar tu audio. ¿Me lo escribís?", `media bin ${bin.status}`);
+  const buf = Buffer.from(await bin.arrayBuffer());
+  if (buf.length > MAX_AUDIO_BYTES) throw falla("Tu audio es muy largo para mí. ¿Me lo mandás más corto (hasta 1 minuto) o por escrito?", "audio grande");
+  const form = new FormData();
+  form.append("file", new Blob([buf], { type: info.mime_type || "audio/ogg" }), "audio.ogg");
+  form.append("model", "whisper-large-v3-turbo");
+  form.append("language", "es");
+  form.append("response_format", "json");
+  const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", { method: "POST", headers: { Authorization: `Bearer ${GROQ_API_KEY}` }, body: form });
+  if (!r.ok) throw falla("No pude escuchar tu audio ahora. ¿Me lo escribís?", `whisper ${r.status}`);
+  const texto = String((await r.json()).text || "").trim();
+  if (!texto) throw falla("No logré entender el audio. ¿Probás de nuevo o me lo escribís?", "transcripción vacía");
+  return texto;
+}
+
+async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEFONO_PREDETERMINADO, desdeAudio = false) {
   if (!groq) {
     await enviar(numero, "El asistente personal todavía no está activado. Falta configurar GROQ_API_KEY. La atención habitual de NexoAI permanece separada.", phoneNumberId);
     return;
@@ -486,6 +513,13 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
 
   if (esJonathan(numero)) {
     limpiarSolicitudesContacto();
+    if (desdeAudio) {
+      const esperandoVoz = ordenEnEspera.destino && Date.now() - ordenEnEspera.ts < 10 * 60 * 1000;
+      if (/^\s*(acepto|rechazo)\b/i.test(texto) || leerOrdenDeJonathan(texto) || esperandoVoz) {
+        await enviar(numero, "Te escuché 🎧, pero por seguridad las órdenes y los códigos de aceptar/rechazar los necesito por escrito.", phoneNumberId);
+        return;
+      }
+    }
     const decision = texto.match(/^\s*(acepto|rechazo)\s+(\d{6})\s*$/i);
     if (decision) {
       const solicitud = solicitudesContacto.get(decision[2]);
@@ -603,6 +637,25 @@ async function procesar(m, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
     return;
   }
 
+  if (m.type === "audio" && groq && m.audio?.id) {
+    const esPersonal = PERSONAL_WHATSAPP_PHONE_NUMBER_ID
+      ? phoneNumberId === PERSONAL_WHATSAPP_PHONE_NUMBER_ID
+      : Boolean(numeroPersonal && String(numero || "").replace(/\D/g, "") === numeroPersonal);
+    if (esPersonal) {
+      let texto;
+      try {
+        texto = await transcribirAudio(m.audio.id);
+      } catch (err) {
+        console.error("Error con audio:", err.message);
+        await enviar(numero, err.aviso || "No pude escuchar tu audio. ¿Me lo escribís?", phoneNumberId);
+        return;
+      }
+      console.log(`Audio de ${numero} transcripto (${texto.length} caracteres)`);
+      await enviar(numero, `🎧 Te escuché: “${texto.slice(0, 300)}”`, phoneNumberId);
+      await procesarAsistentePersonal(numero, texto, phoneNumberId, true);
+      return;
+    }
+  }
   if (m.type !== "text") {
     const avisoTexto = "Por ahora solo puedo leer mensajes de texto. ¿Me escribís tu consulta?";
     registrarEnPlanilla({ numero, texto: textoDe(m), respuesta: avisoTexto, estado: "Mensaje que no es texto" });
