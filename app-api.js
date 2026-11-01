@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { manejarAgenda } from "./agenda.js";
+import { manejarAgenda, listarParaApp, borrarPorId } from "./agenda.js";
 
 // Acceso de la app Lindsy ProMax (Android) al cerebro de Lindsy.
 // Protegido con LINDSY_APP_TOKEN (clave larga que solo tienen el servidor y la app).
@@ -29,6 +29,27 @@ export function registrarApiApp(app, { groq, modelo, instrucciones }) {
   app.get("/api/lindsy/ping", (req, res) => {
     if (!autorizar(req, res)) return;
     res.json({ ok: true });
+  });
+
+  const limpiar = (s) => String(s || "").replace(/[*_]/g, "").replace(/[\u2705\u{1F300}-\u{1FAFF}]/gu, "").trim();
+
+  app.get("/api/agenda", (req, res) => {
+    if (!autorizar(req, res)) return;
+    res.json({ items: listarParaApp() });
+  });
+
+  app.post("/api/agenda", (req, res) => {
+    if (!autorizar(req, res)) return;
+    const texto = String(req.body?.texto || "").trim().slice(0, 300);
+    if (!texto) return res.status(400).json({ error: "Falta el texto." });
+    const respuesta = limpiar(manejarAgenda("anotá " + texto));
+    res.json({ respuesta, items: listarParaApp() });
+  });
+
+  app.delete("/api/agenda/:id", (req, res) => {
+    if (!autorizar(req, res)) return;
+    if (!borrarPorId(req.params.id)) return res.status(404).json({ error: "Ese pendiente ya no existe." });
+    res.json({ ok: true, items: listarParaApp() });
   });
 
   app.post("/api/lindsy", async (req, res) => {
