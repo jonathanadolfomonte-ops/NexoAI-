@@ -145,3 +145,21 @@ export function manejarAgenda(texto, ahora = Date.now()) {
   }
   return null;
 }
+
+// ---- Para la app Lindsy ProMax
+export function listarParaApp(ahora = Date.now()) {
+  return leer().items.slice().sort(orden).map((it) => ({
+    id: it.id,
+    texto: it.texto,
+    cuando: it.fecha ? nombreDia(it.fecha, ahora) + (it.hora ? " " + it.hora : "") : it.hora || "",
+  }));
+}
+
+export function borrarPorId(id) {
+  const d = leer();
+  const i = d.items.findIndex((x) => x.id === Number(id));
+  if (i < 0) return false;
+  d.items.splice(i, 1);
+  guardar(d);
+  return true;
+}

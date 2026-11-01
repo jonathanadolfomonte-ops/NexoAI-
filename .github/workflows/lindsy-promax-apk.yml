@@ -8,6 +8,10 @@ on:
       - ".github/workflows/lindsy-promax-apk.yml"
   workflow_dispatch:
 
+concurrency:
+  group: promax-apk
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
