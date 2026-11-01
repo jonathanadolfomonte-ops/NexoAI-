@@ -4,6 +4,7 @@ import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { manejarAgenda } from "./agenda.js";
+import { registrarApiApp } from "./app-api.js";
 
 const {
   PORT = 3000,
@@ -862,5 +863,7 @@ async function enviar(numero, texto, phoneNumberId = ID_TELEFONO_PREDETERMINADO)
   }
   return false;
 }
+
+registrarApiApp(app, { groq, modelo: GROQ_MODEL, instrucciones: () => instruccionesLindsy });
 
 app.listen(PORT, () => console.log(`NexoAI WhatsApp escuchando en el puerto ${PORT}`));
