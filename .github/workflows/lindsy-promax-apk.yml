@@ -1,0 +1,36 @@
+name: Lindsy ProMax APK
+
+on:
+  push:
+    branches: [lindsy-promax]
+    paths:
+      - "lindsy-promax/**"
+      - ".github/workflows/lindsy-promax-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - name: Compilar APK
+        run: gradle -p lindsy-promax assembleDebug --no-daemon
+      - name: Publicar APK en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp lindsy-promax/app/build/outputs/apk/debug/app-debug.apk LindsyProMax.apk
+          gh release delete lindsy-promax-latest --yes --cleanup-tag || true
+          gh release create lindsy-promax-latest LindsyProMax.apk --target "$GITHUB_SHA" --prerelease \
+            --title "Lindsy ProMax (última versión)" \
+            --notes "APK de prueba. Instalar en Android permitiendo apps de origen desconocido."
