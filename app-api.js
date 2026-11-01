@@ -47,8 +47,10 @@ export function registrarApiApp(app, { groq, modelo, instrucciones }) {
           { role: "system", content: String(instrucciones()) + "\n\nEstás hablando por voz con Jonathan en la app Lindsy ProMax. Respondé corto (1 a 3 frases), natural, sin markdown, sin listas y sin emojis." },
           ...historial,
         ],
-        max_tokens: 400,
+        max_tokens: 1500,
+        reasoning_effort: "low",
       });
+      if (r.choices?.[0]?.finish_reason === "length") console.error("Respuesta de la app cortada por límite de tokens");
       const respuesta = String(r.choices?.[0]?.message?.content || "").trim() || "No pude pensar una respuesta. ¿Me lo repetís?";
       historial.push({ role: "assistant", content: respuesta });
       while (historial.length > MAX) historial.shift();
