@@ -5,6 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { manejarAgenda } from "./agenda.js";
 import { registrarApiApp } from "./app-api.js";
+import { limitePorNumero } from "./limite.js";
 
 const {
   PORT = 3000,
@@ -642,6 +643,19 @@ async function procesar(m, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
     console.log(`Conversacion con ${numero} en pausa (respondio una persona): el bot no contesta`);
     registrarEnPlanilla({ numero, texto: textoDe(m), respuesta: "", estado: "Bot en pausa (respondió una persona)" });
     return;
+  }
+
+  // Limite por numero: frena inundaciones de desconocidos en el flujo personal
+  const esFlujoPersonal = PERSONAL_WHATSAPP_PHONE_NUMBER_ID
+    ? phoneNumberId === PERSONAL_WHATSAPP_PHONE_NUMBER_ID
+    : Boolean(numeroPersonal && String(numero || "").replace(/\D/g, "") === numeroPersonal);
+  if (esFlujoPersonal && !esJonathan(numero)) {
+    const lim = limitePorNumero(numero);
+    if (!lim.permitido) {
+      console.log(`Limite (${lim.motivo}) alcanzado para ${numero}: se ignora el mensaje`);
+      if (lim.avisar) await enviar(numero, "Recibí muchos mensajes seguidos. Para no saturarme, probá de nuevo en un rato. ¡Gracias!", phoneNumberId);
+      return;
+    }
   }
 
   if (m.type === "audio" && groq && m.audio?.id) {
