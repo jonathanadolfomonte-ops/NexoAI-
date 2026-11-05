@@ -46,6 +46,13 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var botonHablar: Button? = null
     private var modoContinuo: Switch? = null
 
+    // Micro app: modo escucha (palabra de activacion "Lindsy")
+    private var escuchaActiva = false
+    private var esperandoOrden = false
+    private val ciclo = android.os.Handler(android.os.Looper.getMainLooper())
+    private val palabraClave = Regex("""\b(lindsy|lindsi|lindsay|lindsey|linchi|linsi|lindi)\b[,.!?]*\s*""", RegexOption.IGNORE_CASE)
+    private val palabraCierre = Regex("""^(chau|chao|listo|terminar|nada más|nada mas|gracias lindsy|gracias)[.! ]*$""", RegexOption.IGNORE_CASE)
+
     // Micro app: agenda
     private var listaAgenda: LinearLayout? = null
     private var estadoAgenda: TextView? = null
@@ -106,12 +113,17 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         })
         raiz.addView(botonGrande("🎤  Hablar con Lindsy") { mostrarCharla() })
         raiz.addView(botonGrande("📅  Agenda") { mostrarAgenda() })
+        raiz.addView(botonGrande("👂  Modo escucha (decí «Lindsy»)") { mostrarEscucha() })
         raiz.addView(botonGrande("📝  Notas (próximamente)") {}.apply { isEnabled = false })
         raiz.addView(botonGrande("🔑  Clave de acceso") { pedirClave() }.apply { textSize = 16f })
         mostrar(ScrollView(this).apply { addView(raiz) })
     }
 
     private fun detenerVozYMicro() {
+        escuchaActiva = false
+        esperandoOrden = false
+        ciclo.removeCallbacksAndMessages(null)
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         voz?.stop()
         reconocedor?.destroy()
         reconocedor = null
@@ -275,7 +287,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+        if (requestCode == 2 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            iniciarEscucha()
+        } else if (requestCode == 1 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
             escuchar()
         } else {
             estado?.text = "Sin permiso de micrófono no puedo escucharte."
@@ -318,8 +332,171 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun terminoDeHablar() {
+        if (pantalla == "escucha") {
+            if (escuchaActiva) reiniciarEscucha(400)
+            return
+        }
         if (pantalla != "charla") return
         if (modoContinuo?.isChecked == true) escuchar() else estado?.text = "Tocá para hablar."
+    }
+
+    // ---------------- Micro app: Modo escucha ----------------
+    private fun mostrarEscucha() {
+        pantalla = "escucha"
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val raiz = columna()
+        raiz.addView(volverBoton())
+        raiz.addView(titulo("Modo escucha"))
+        estado = TextView(this).apply {
+            text = "Preparando…"
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(8))
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        charla = TextView(this).apply {
+            textSize = 18f
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+        }
+        scroll = ScrollView(this).apply { addView(charla) }
+        botonHablar = Button(this).apply {
+            text = "Pausar escucha"
+            textSize = 20f
+            isAllCaps = false
+            setOnClickListener {
+                if (escuchaActiva) {
+                    escuchaActiva = false
+                    esperandoOrden = false
+                    ciclo.removeCallbacksAndMessages(null)
+                    reconocedor?.destroy()
+                    reconocedor = null
+                    voz?.stop()
+                    estado?.text = "Escucha en pausa."
+                    text = "Reanudar escucha"
+                } else {
+                    text = "Pausar escucha"
+                    iniciarEscucha()
+                }
+            }
+        }
+        raiz.addView(estado)
+        raiz.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        raiz.addView(botonHablar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        mostrar(raiz)
+        iniciarEscucha()
+    }
+
+    private fun iniciarEscucha() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 2)
+            return
+        }
+        if (clave().isBlank()) {
+            estado?.text = "Primero cargá la clave en «Clave de acceso»."
+            pedirClave()
+            return
+        }
+        escuchaActiva = true
+        esperandoOrden = false
+        reiniciarEscucha(200)
+    }
+
+    private fun reiniciarEscucha(demora: Long) {
+        ciclo.removeCallbacksAndMessages(null)
+        ciclo.postDelayed({ escucharPalabra() }, demora)
+    }
+
+    private fun escucharPalabra() {
+        if (!escuchaActiva || pantalla != "escucha") return
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            estado?.text = "Este dispositivo no tiene reconocimiento de voz."
+            return
+        }
+        reconocedor?.destroy()
+        reconocedor = SpeechRecognizer.createSpeechRecognizer(this).also { sr ->
+            sr.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    estado?.text = if (esperandoOrden) "Te escucho, decime…" else "Escuchando… decí «Lindsy»"
+                }
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+                override fun onError(error: Int) {
+                    if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                        escuchaActiva = false
+                        estado?.text = "Sin permiso de micrófono."
+                        return
+                    }
+                    val sinVoz = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                    if (sinVoz) esperandoOrden = false
+                    reiniciarEscucha(if (sinVoz) 300L else 1500L)
+                }
+                override fun onResults(results: Bundle?) {
+                    val texto = results
+                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()?.trim().orEmpty()
+                    if (texto.isEmpty()) { reiniciarEscucha(300); return }
+                    if (esperandoOrden) {
+                        esperandoOrden = false
+                        atenderOrden(texto)
+                        return
+                    }
+                    val m = palabraClave.find(texto)
+                    if (m == null) { reiniciarEscucha(200); return }
+                    val orden = texto.substring(m.range.last + 1).trim()
+                    if (orden.length < 2) {
+                        esperandoOrden = true
+                        agregar("Lindsy", "Sí, decime.")
+                        hablar("Sí, decime.")
+                    } else {
+                        atenderOrden(orden)
+                    }
+                }
+            })
+            val intento = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-AR")
+            }
+            sr.startListening(intento)
+        }
+    }
+
+    private fun atenderOrden(orden: String) {
+        agregar("Vos", orden)
+        estado?.text = "Lindsy está pensando…"
+        val terminar = palabraCierre.matches(orden)
+        thread {
+            val respuesta = try {
+                val r = pedir("POST", "/api/lindsy", JSONObject().put("texto", orden))
+                if (r.first == 200) r.second.optString("respuesta", "No entendí la respuesta del servidor.") else mensajeError(r)
+            } catch (e: Exception) {
+                "No pude conectarme con Lindsy. Revisá la conexión a internet."
+            }
+            runOnUiThread {
+                if (pantalla != "escucha" || !escuchaActiva) return@runOnUiThread
+                agregar("Lindsy", respuesta)
+                esperandoOrden = !terminar
+                hablar(respuesta)
+            }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (pantalla == "escucha") {
+            ciclo.removeCallbacksAndMessages(null)
+            reconocedor?.destroy()
+            reconocedor = null
+            voz?.stop()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (pantalla == "escucha" && escuchaActiva) reiniciarEscucha(500)
     }
 
     // ---------------- Micro app: Agenda ----------------
