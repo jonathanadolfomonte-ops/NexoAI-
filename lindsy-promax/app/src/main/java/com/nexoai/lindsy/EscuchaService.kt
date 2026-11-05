@@ -1,8 +1,5 @@
 package com.nexoai.lindsy
 
-import ai.picovoice.porcupine.Porcupine
-import ai.picovoice.porcupine.PorcupineManager
-import ai.picovoice.porcupine.PorcupineManagerCallback
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,19 +8,19 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import android.widget.Toast
 import org.json.JSONObject
-import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -71,15 +68,16 @@ class EscuchaService : Service(), TextToSpeech.OnInitListener {
     }
 
     private val ui = Handler(Looper.getMainLooper())
-    private var porcupine: PorcupineManager? = null
     private var voz: TextToSpeech? = null
     private var vozLista = false
     private var reconocedor: SpeechRecognizer? = null
-    private var ocupado = false
+    private var esperandoOrden = false
     private var esperando = false
     private var alTerminarDeHablar: (() -> Unit)? = null
     private var contador = 0
     private var idActual = ""
+    private var bloqueo: PowerManager.WakeLock? = null
+    private val palabraClave = Regex("""\b(lindsy|lindsi|lindsay|lindsey|lindzy|lindzi|linchi|linsi|linsy|lincy|lindi)\b[,.!?]*\s*""", RegexOption.IGNORE_CASE)
     private val cierre = Regex("""^(chau|chao|listo|terminar|nada más|nada mas|gracias lindsy|gracias)[.! ]*$""", RegexOption.IGNORE_CASE)
     private val avisoLento = Runnable {
         if (esperando) hablar("Un momento, estoy conectando.") { }
@@ -92,13 +90,13 @@ class EscuchaService : Service(), TextToSpeech.OnInitListener {
             detener()
             return START_NOT_STICKY
         }
-        val n = notificacion("Escuchando… decí la palabra de activación")
+        val n = notificacion("Escuchando… decí «Lindsy»")
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         } else {
             startForeground(1, n)
         }
-        if (porcupine == null) iniciar()
+        if (!activo) iniciar()
         return START_NOT_STICKY
     }
 
@@ -120,28 +118,24 @@ class EscuchaService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun iniciar() {
-        val p = getSharedPreferences("lindsy", Context.MODE_PRIVATE)
-        val claveVoz = p.getString("picovoice", "")?.trim().orEmpty()
-        if (claveVoz.isEmpty()) {
-            avisarYParar("Falta la clave de Picovoice.")
-            return
-        }
+        activo = true
+        esperandoOrden = false
         voz = TextToSpeech(this, this)
         try {
-            val b = PorcupineManager.Builder().setAccessKey(claveVoz).setSensitivity(0.65f)
-            val ppn = File(filesDir, "palabra.ppn")
-            if (ppn.exists()) b.setKeywordPath(ppn.absolutePath) else b.setKeyword(Porcupine.BuiltInKeyword.JARVIS)
-            porcupine = b.build(applicationContext, PorcupineManagerCallback { ui.post { alDetectar() } })
-            porcupine?.start()
-            activo = true
-        } catch (e: Exception) {
-            avisarYParar("No pude iniciar la escucha: " + (e.message ?: e.javaClass.simpleName))
-        }
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            bloqueo = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "lindsy:escucha").apply { acquire() }
+        } catch (e: Exception) { }
+        silenciarBip(true)
+        reiniciar(800)
     }
 
-    private fun avisarYParar(mensaje: String) {
-        Toast.makeText(this, mensaje, Toast.LENGTH_LONG).show()
-        detener()
+    private fun silenciarBip(silenciar: Boolean) {
+        try {
+            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val dir = if (silenciar) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE
+            am.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, dir, 0)
+            am.adjustStreamVolume(AudioManager.STREAM_SYSTEM, dir, 0)
+        } catch (e: Exception) { }
     }
 
     override fun onInit(resultado: Int) {
@@ -182,35 +176,14 @@ class EscuchaService : Service(), TextToSpeech.OnInitListener {
         voz?.speak(Util.textoCorto(texto), TextToSpeech.QUEUE_FLUSH, null, idActual)
     }
 
-    private fun pausarPalabra() {
-        try { porcupine?.stop() } catch (e: Exception) { }
+    private fun reiniciar(demora: Long) {
+        ui.removeCallbacksAndMessages(null)
+        ui.postDelayed({ escuchar() }, demora)
     }
 
-    private fun reanudarPalabra() {
-        try { porcupine?.start() } catch (e: Exception) { }
-    }
-
-    private fun alDetectar() {
-        if (ocupado || !activo) return
-        ocupado = true
-        pausarPalabra()
-        hablar("Sí, decime.") { escucharOrden() }
-    }
-
-    private fun terminar() {
-        ocupado = false
-        esperando = false
-        reconocedor?.destroy()
-        reconocedor = null
-        if (activo) reanudarPalabra()
-    }
-
-    private fun escucharOrden() {
+    private fun escuchar() {
         if (!activo) return
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            terminar()
-            return
-        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) return
         reconocedor?.destroy()
         reconocedor = SpeechRecognizer.createSpeechRecognizer(this).also { sr ->
             sr.setRecognitionListener(object : RecognitionListener {
@@ -221,17 +194,40 @@ class EscuchaService : Service(), TextToSpeech.OnInitListener {
                 override fun onEndOfSpeech() {}
                 override fun onPartialResults(partialResults: Bundle?) {}
                 override fun onEvent(eventType: Int, params: Bundle?) {}
-                override fun onError(error: Int) { terminar() }
+                override fun onError(error: Int) {
+                    val sinVoz = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                    if (sinVoz) esperandoOrden = false
+                    reiniciar(if (sinVoz) 300L else 2000L)
+                }
                 override fun onResults(results: Bundle?) {
-                    val texto = results
-                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        ?.firstOrNull()?.trim().orEmpty()
-                    if (texto.isEmpty()) terminar() else atender(texto)
+                    val lista = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: arrayListOf()
+                    val texto = lista.firstOrNull()?.trim().orEmpty()
+                    if (texto.isEmpty()) { reiniciar(300); return }
+                    if (esperandoOrden) {
+                        esperandoOrden = false
+                        atender(texto)
+                        return
+                    }
+                    var coincidencia: MatchResult? = null
+                    var base = texto
+                    for (alt in lista) {
+                        val x = palabraClave.find(alt)
+                        if (x != null) { coincidencia = x; base = alt; break }
+                    }
+                    if (coincidencia == null) { reiniciar(200); return }
+                    val orden = base.substring(coincidencia.range.last + 1).trim()
+                    if (orden.length < 2) {
+                        esperandoOrden = true
+                        hablar("Sí, decime.") { reiniciar(200) }
+                    } else {
+                        atender(orden)
+                    }
                 }
             })
             val intento = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-AR")
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L)
             }
             sr.startListening(intento)
@@ -252,7 +248,10 @@ class EscuchaService : Service(), TextToSpeech.OnInitListener {
                 ui.removeCallbacks(avisoLento)
                 esperando = false
                 if (activo) {
-                    hablar(respuesta) { if (termina) terminar() else escucharOrden() }
+                    hablar(respuesta) {
+                        esperandoOrden = !termina
+                        reiniciar(300)
+                    }
                 }
             }
         }
@@ -261,14 +260,14 @@ class EscuchaService : Service(), TextToSpeech.OnInitListener {
     private fun liberar() {
         activo = false
         ui.removeCallbacksAndMessages(null)
-        try { porcupine?.stop() } catch (e: Exception) { }
-        try { porcupine?.delete() } catch (e: Exception) { }
-        porcupine = null
         reconocedor?.destroy()
         reconocedor = null
         voz?.stop()
         voz?.shutdown()
         voz = null
+        silenciarBip(false)
+        try { if (bloqueo?.isHeld == true) bloqueo?.release() } catch (e: Exception) { }
+        bloqueo = null
     }
 
     private fun detener() {
