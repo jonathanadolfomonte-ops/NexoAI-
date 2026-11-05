@@ -643,7 +643,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun activarSegundoPlano(): Boolean {
         if (clave().isBlank()) { pedirClave(); return false }
-        if (clavePicovoice().isBlank()) { pedirClavePicovoice(); return false }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             val permisos = if (Build.VERSION.SDK_INT >= 33)
                 arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
@@ -678,7 +677,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             textSize = 16f
             setPadding(0, dp(8), 0, dp(8))
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-            text = if (File(filesDir, "palabra.ppn").exists()) "Palabra de activación: la tuya (.ppn)." else "Palabra de activación: «Jarvis»."
+            text = "Palabra de activación: «Lindsy»."
         }
         val interruptor = Switch(this).apply {
             text = "Escuchar en segundo plano"
@@ -697,18 +696,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         interruptorSegundoPlano = interruptor
         raiz.addView(interruptor)
         raiz.addView(estadoAjustes)
-        raiz.addView(botonGrande("🔑  Clave de Picovoice") { pedirClavePicovoice() }.apply { textSize = 16f })
-        raiz.addView(botonGrande("📄  Cargar palabra propia (.ppn)") {
-            val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = "*/*"
-            }
-            startActivityForResult(i, 3)
-        }.apply { textSize = 16f })
-        raiz.addView(botonGrande("↩️  Volver a la palabra «Jarvis»") {
-            File(filesDir, "palabra.ppn").delete()
-            estadoAjustes?.text = "Palabra de activación: «Jarvis». Apagá y prendé la escucha para aplicarlo."
-        }.apply { textSize = 16f })
         raiz.addView(botonGrande("🔋  Quitar restricción de batería") {
             startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
         }.apply { textSize = 16f })
