@@ -6,7 +6,9 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -26,6 +28,7 @@ import android.widget.Switch
 import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -116,7 +119,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         raiz.addView(botonGrande("🎤  Hablar con Lindsy") { mostrarCharla() })
         raiz.addView(botonGrande("📅  Agenda") { mostrarAgenda() })
         raiz.addView(botonGrande("👂  Modo escucha (decí «Lindsy»)") { mostrarEscucha() })
-        raiz.addView(botonGrande("⚙️  Ajustes de voz") { mostrarAjustes() })
+        raiz.addView(botonGrande("⚙️  Ajustes y segundo plano") { mostrarAjustes() })
         raiz.addView(botonGrande("📝  Notas (próximamente)") {}.apply { isEnabled = false })
         raiz.addView(botonGrande("🔑  Clave de acceso") { pedirClave() }.apply { textSize = 16f })
         mostrar(ScrollView(this).apply { addView(raiz) })
@@ -297,6 +300,13 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             iniciarEscucha()
         } else if (requestCode == 1 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
             escuchar()
+        } else if (requestCode == 4) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                arrancarServicio()
+            } else {
+                interruptorSegundoPlano?.isChecked = false
+                estadoAjustes?.text = "Sin permiso de micrófono no puedo escuchar."
+            }
         } else {
             estado?.text = "Sin permiso de micrófono no puedo escucharte."
         }
@@ -394,6 +404,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun mostrarEscucha() {
         pantalla = "escucha"
+        stopService(Intent(this, EscuchaService::class.java))
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val raiz = columna()
         raiz.addView(volverBoton())
@@ -599,11 +610,109 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         return caja
     }
 
+    private var estadoAjustes: TextView? = null
+    private var interruptorSegundoPlano: Switch? = null
+
+    private fun clavePicovoice(): String =
+        getSharedPreferences("lindsy", MODE_PRIVATE).getString("picovoice", "") ?: ""
+
+    private fun pedirClavePicovoice() {
+        val campo = EditText(this).apply {
+            hint = "AccessKey de Picovoice"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(clavePicovoice())
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Clave de Picovoice")
+            .setMessage("Se crea gratis en console.picovoice.ai (AccessKey).")
+            .setView(campo)
+            .setPositiveButton("Guardar") { _, _ ->
+                getSharedPreferences("lindsy", MODE_PRIVATE).edit()
+                    .putString("picovoice", campo.text.toString().trim()).apply()
+                estadoAjustes?.text = "Clave de Picovoice guardada."
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun arrancarServicio() {
+        val i = Intent(this, EscuchaService::class.java)
+        if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
+        estadoAjustes?.text = "Escucha en segundo plano activada. Decí la palabra de activación."
+    }
+
+    private fun activarSegundoPlano(): Boolean {
+        if (clave().isBlank()) { pedirClave(); return false }
+        if (clavePicovoice().isBlank()) { pedirClavePicovoice(); return false }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            val permisos = if (Build.VERSION.SDK_INT >= 33)
+                arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
+            else arrayOf(Manifest.permission.RECORD_AUDIO)
+            requestPermissions(permisos, 4)
+            return true
+        }
+        arrancarServicio()
+        return true
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 3 || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        try {
+            contentResolver.openInputStream(uri)?.use { ent ->
+                File(filesDir, "palabra.ppn").outputStream().use { sal -> ent.copyTo(sal) }
+            }
+            estadoAjustes?.text = "Palabra propia cargada. Apagá y prendé la escucha en segundo plano para usarla."
+        } catch (e: Exception) {
+            estadoAjustes?.text = "No pude leer el archivo."
+        }
+    }
+
     private fun mostrarAjustes() {
         pantalla = "ajustes"
         val raiz = columna()
         raiz.addView(volverBoton())
-        raiz.addView(titulo("Ajustes de voz"))
+        raiz.addView(titulo("Ajustes"))
+        estadoAjustes = TextView(this).apply {
+            textSize = 16f
+            setPadding(0, dp(8), 0, dp(8))
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            text = if (File(filesDir, "palabra.ppn").exists()) "Palabra de activación: la tuya (.ppn)." else "Palabra de activación: «Jarvis»."
+        }
+        val interruptor = Switch(this).apply {
+            text = "Escuchar en segundo plano"
+            textSize = 18f
+            setPadding(0, dp(12), 0, dp(12))
+            isChecked = EscuchaService.activo
+            setOnCheckedChangeListener { boton, marcado ->
+                if (marcado) {
+                    if (!activarSegundoPlano()) boton.isChecked = false
+                } else {
+                    stopService(Intent(this@MainActivity, EscuchaService::class.java))
+                    estadoAjustes?.text = "Escucha en segundo plano desactivada."
+                }
+            }
+        }
+        interruptorSegundoPlano = interruptor
+        raiz.addView(interruptor)
+        raiz.addView(estadoAjustes)
+        raiz.addView(botonGrande("🔑  Clave de Picovoice") { pedirClavePicovoice() }.apply { textSize = 16f })
+        raiz.addView(botonGrande("📄  Cargar palabra propia (.ppn)") {
+            val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+            }
+            startActivityForResult(i, 3)
+        }.apply { textSize = 16f })
+        raiz.addView(botonGrande("↩️  Volver a la palabra «Jarvis»") {
+            File(filesDir, "palabra.ppn").delete()
+            estadoAjustes?.text = "Palabra de activación: «Jarvis». Apagá y prendé la escucha para aplicarlo."
+        }.apply { textSize = 16f })
+        raiz.addView(botonGrande("🔋  Quitar restricción de batería") {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }.apply { textSize = 16f })
+        raiz.addView(titulo("Voz"))
         raiz.addView(barraAjuste("Velocidad", "tasa", 0.95f))
         raiz.addView(barraAjuste("Tono", "tono", 1.0f))
         raiz.addView(botonGrande("🔊  Probar voz") { hablar("Hola, soy Lindsy. Así suena mi voz ahora.") })
