@@ -11,8 +11,8 @@ android {
         applicationId = "com.nexoai.lindsy.promax"
         minSdk = 24
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.4.2"
+        versionCode = 8
+        versionName = "0.5.0"
     }
     signingConfigs {
         getByName("debug") {
@@ -30,4 +30,8 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+}
+
+dependencies {
+    implementation("ai.picovoice:porcupine-android:4.0.2")
 }
