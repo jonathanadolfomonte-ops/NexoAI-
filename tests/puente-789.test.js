@@ -102,6 +102,18 @@ test("evita duplicar un mismo event_id", async () => {
   await handler(peticion({ body: evento }), res2);
   assert.equal(llamadas, 1);
   assert.equal(res2.payload.duplicada, true);
+  assert.equal(res2.payload.enviado, true);
+});
+
+test("una alerta simulada duplicada sigue identificada como simulación", async () => {
+  const handler = crearPuenteAlertas({ tokenServicio: "servicio-secreto-de-prueba" });
+  const res1 = respuesta();
+  const res2 = respuesta();
+  await handler(peticion({ body: evento }), res1);
+  await handler(peticion({ body: evento }), res2);
+  assert.equal(res1.payload.modo, "simulacion");
+  assert.equal(res2.payload.modo, "simulacion");
+  assert.equal(res2.payload.enviado, undefined);
 });
 
 test("si Meta falla, permite reintentar el mismo evento", async () => {
