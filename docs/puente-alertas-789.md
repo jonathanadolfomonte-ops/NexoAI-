@@ -17,7 +17,7 @@ El destinatario no se acepta desde el cuerpo: se fija por configuración protegi
 ## Variables que requeriría una futura integración
 
 - LINDSY_ALERT_BRIDGE_TOKEN
-- META_ACCESS_TOKEN
+- META_ACCESS_TOKEN_789
 - META_PHONE_NUMBER_ID_789 (emisor: línea 789)
 - ALERTA_DESTINATARIO_084 (destino: WhatsApp personal 084)
 - ENABLE_REAL_ALERTS (debe permanecer false hasta la autorización explícita)
