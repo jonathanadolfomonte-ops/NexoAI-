@@ -1,6 +1,6 @@
 # Puente experimental de alertas 789
 
-Este módulo es una prueba aislada. No está conectado a Express, al webhook ni a ningún servicio de producción.
+Este módulo está registrado en una ruta de Express únicamente dentro de esta rama experimental. No modifica el webhook de Meta ni está desplegado en ningún servicio de producción.
 
 ## Contrato previsto
 
