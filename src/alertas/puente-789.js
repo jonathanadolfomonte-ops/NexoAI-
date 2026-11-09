@@ -38,6 +38,7 @@ export function crearPuenteAlertas({
   ttlDedupeMs = 24 * 60 * 60 * 1000,
 } = {}) {
   const eventos = new Map();
+  const enProceso = new Set();
 
   return async function manejarAlerta(req, res) {
     const auth = req.headers?.authorization || "";
@@ -63,6 +64,9 @@ export function crearPuenteAlertas({
     }
     if (eventos.has(eventId)) {
       return res.status(200).json({ ok: true, duplicada: true, event_id: eventId });
+    }
+    if (enProceso.has(eventId)) {
+      return res.status(202).json({ ok: true, en_proceso: true, event_id: eventId });
     }
 
     if (!habilitarEnvioReal) {
@@ -90,9 +94,9 @@ export function crearPuenteAlertas({
       detalle ? "Detalle: " + detalle : "",
     ].filter(Boolean).join("\n");
 
-    let respuesta;
+    enProceso.add(eventId);
     try {
-      respuesta = await fetchImpl(
+      const respuesta = await fetchImpl(
         `https://graph.facebook.com/${versionApi}/${phoneNumberId789}/messages`,
         {
           method: "POST",
@@ -108,15 +112,17 @@ export function crearPuenteAlertas({
           }),
         },
       );
+
+      if (!respuesta?.ok) {
+        return res.status(502).json({ error: "WhatsApp rechazó el envío." });
+      }
+
+      eventos.set(eventId, ahoraMs);
+      return res.status(200).json({ ok: true, enviado: true, event_id: eventId });
     } catch {
       return res.status(502).json({ error: "No se pudo conectar con WhatsApp." });
+    } finally {
+      enProceso.delete(eventId);
     }
-
-    if (!respuesta?.ok) {
-      return res.status(502).json({ error: "WhatsApp rechazó el envío." });
-    }
-
-    eventos.set(eventId, ahoraMs);
-    return res.status(200).json({ ok: true, enviado: true, event_id: eventId });
   };
 }
