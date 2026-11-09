@@ -71,6 +71,15 @@ class PruebasClientePuente(unittest.TestCase):
         self.assertEqual(capturado["auth"], "Bearer token-de-prueba")
         self.assertNotIn("transcripcion", capturado["body"])
 
+    def test_respuesta_en_proceso_no_se_considera_confirmada(self):
+        def falso(req, timeout):
+            return Respuesta({"ok": True, "en_proceso": True}, status=202)
+        with self.assertRaises(ErrorPuenteAlerta):
+            notificar_si_emergencia(
+                {"estado": "emergencia"}, "evento_prueba_000001",
+                habilitado=True, urlopen=falso, pausas=(0,),
+            )
+
     def test_no_envia_transcripcion_completa(self):
         capturado = {}
         def falso(req, timeout):
