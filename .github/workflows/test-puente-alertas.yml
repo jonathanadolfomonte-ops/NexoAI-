@@ -7,6 +7,8 @@ on:
     paths:
       - "cliente_puente_alertas.py"
       - "tests/test_cliente_puente_alertas.py"
+      - "tests/puente-789.test.js"
+      - "src/alertas/puente-789.js"
       - ".github/workflows/test-puente-alertas.yml"
   pull_request:
     branches:
@@ -14,12 +16,24 @@ on:
     paths:
       - "cliente_puente_alertas.py"
       - "tests/test_cliente_puente_alertas.py"
+      - "tests/puente-789.test.js"
+      - "src/alertas/puente-789.js"
       - ".github/workflows/test-puente-alertas.yml"
 
 permissions:
   contents: read
 
 jobs:
+  pruebas-node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Ejecutar pruebas simuladas del puente
+        run: node --test tests/puente-789.test.js
+
   pruebas-python:
     runs-on: ubuntu-latest
     steps:
