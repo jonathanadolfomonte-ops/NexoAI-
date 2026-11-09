@@ -18,16 +18,16 @@ El destinatario no se acepta desde el cuerpo: se fija por configuración protegi
 
 - LINDSY_ALERT_BRIDGE_TOKEN
 - META_ACCESS_TOKEN
-- META_PHONE_NUMBER_ID_789
-- ALERTA_DESTINATARIO
+- META_PHONE_NUMBER_ID_789 (emisor: línea 789)
+- ALERTA_DESTINATARIO_084 (destino: WhatsApp personal 084)
 - ENABLE_REAL_ALERTS (debe permanecer false hasta la autorización explícita)
 
-Los nombres son provisionales. No se deben copiar secretos desde producción ni configurar valores hasta verificar con certeza que META_PHONE_NUMBER_ID_789 corresponde al número 789 y que el token tiene permiso para enviar desde ese número.
+Los nombres son provisionales. 789 es el número emisor y 084 es el destinatario de la alerta. No se deben copiar secretos desde producción ni configurar valores hasta verificar con certeza que META_PHONE_NUMBER_ID_789 corresponde al número 789 y que el token tiene permiso para enviar desde ese número.
 
 ## Límites conocidos de esta primera prueba
 
 - El modo predeterminado es simulación y no realiza llamadas externas.
 - La deduplicación vive en memoria; no es suficiente para producción ni sobrevive reinicios. Antes de desplegar se deberá usar almacenamiento persistente.
-- Este módulo todavía no está registrado como ruta en server.js.
+- La ruta queda registrada únicamente en esta rama experimental: POST /api/alertas/emergencia. La rama no está desplegada.
 - Los tests usan respuestas falsas de Meta; no envían WhatsApps reales.
 - No se debe habilitar el envío real ni desplegar sin revisión y autorización separada.
