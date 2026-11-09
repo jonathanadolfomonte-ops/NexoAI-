@@ -60,17 +60,25 @@ export function crearPuenteAlertas({
 
     const ahoraMs = ahora();
     for (const [id, marca] of eventos) {
-      if (ahoraMs - marca >= ttlDedupeMs) eventos.delete(id);
+      if (ahoraMs - marca.at >= ttlDedupeMs) eventos.delete(id);
     }
     if (eventos.has(eventId)) {
-      return res.status(200).json({ ok: true, duplicada: true, event_id: eventId });
+      const previo = eventos.get(eventId);
+      return res.status(200).json({
+        ok: true,
+        duplicada: true,
+        event_id: eventId,
+        ...(previo.modo === "simulacion"
+          ? { modo: "simulacion" }
+          : { enviado: true }),
+      });
     }
     if (enProceso.has(eventId)) {
       return res.status(202).json({ ok: true, en_proceso: true, event_id: eventId });
     }
 
     if (!habilitarEnvioReal) {
-      eventos.set(eventId, ahoraMs);
+      eventos.set(eventId, { at: ahoraMs, modo: "simulacion" });
       return res.status(202).json({
         ok: true,
         modo: "simulacion",
@@ -117,7 +125,7 @@ export function crearPuenteAlertas({
         return res.status(502).json({ error: "WhatsApp rechazó el envío." });
       }
 
-      eventos.set(eventId, ahoraMs);
+      eventos.set(eventId, { at: ahora(), modo: "enviado" });
       return res.status(200).json({ ok: true, enviado: true, event_id: eventId });
     } catch {
       return res.status(502).json({ error: "No se pudo conectar con WhatsApp." });
