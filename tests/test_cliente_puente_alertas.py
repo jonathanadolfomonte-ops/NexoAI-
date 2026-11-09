@@ -63,7 +63,7 @@ class PruebasClientePuente(unittest.TestCase):
         r = notificar_si_emergencia(
             {"estado": "emergencia"}, "evento_prueba_000001",
             categoria="emergencia_medica", detalle="Resumen breve",
-            habilitado=True, urlopen=falso, pausas=(),
+            habilitado=True, urlopen=falso, pausas=(0,),
         )
         self.assertEqual(r["estado"], "simulada")
         self.assertTrue(capturado["url"].endswith("/api/alertas/emergencia"))
@@ -79,7 +79,7 @@ class PruebasClientePuente(unittest.TestCase):
         notificar_si_emergencia(
             {"estado": "emergencia", "transcripcion": "dato privado"},
             "evento_prueba_000001", detalle="Resumen",
-            habilitado=True, urlopen=falso, pausas=(),
+            habilitado=True, urlopen=falso, pausas=(0,),
         )
         self.assertNotIn("transcripcion", capturado)
         self.assertNotIn("dato privado", json.dumps(capturado))
