@@ -1,0 +1,31 @@
+name: Pruebas aisladas del puente de alertas
+
+on:
+  push:
+    branches:
+      - experimento-puente-alertas-789
+    paths:
+      - "cliente_puente_alertas.py"
+      - "tests/test_cliente_puente_alertas.py"
+      - ".github/workflows/test-puente-alertas.yml"
+  pull_request:
+    branches:
+      - experimento-puente-alertas-789
+    paths:
+      - "cliente_puente_alertas.py"
+      - "tests/test_cliente_puente_alertas.py"
+      - ".github/workflows/test-puente-alertas.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Ejecutar pruebas simuladas
+        run: python -m unittest discover -s tests -p "test_cliente_puente_alertas.py" -v
