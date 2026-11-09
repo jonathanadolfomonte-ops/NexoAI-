@@ -86,8 +86,14 @@ def notificar_si_emergencia(
             datos = json.loads(cuerpo or "{}")
             if codigo not in (200, 202) or not datos.get("ok"):
                 raise ErrorPuenteAlerta("El puente no confirmó la alerta")
+            if datos.get("en_proceso"):
+                raise ErrorPuenteAlerta("La alerta sigue en proceso; todavía no está confirmada")
+            es_simulacion = datos.get("modo") == "simulacion"
+            es_confirmacion_real = datos.get("enviado") is True
+            if not es_simulacion and not es_confirmacion_real:
+                raise ErrorPuenteAlerta("Respuesta del puente sin confirmación verificable")
             return {
-                "estado": "simulada" if datos.get("modo") == "simulacion" else "confirmada",
+                "estado": "simulada" if es_simulacion else "confirmada",
                 "event_id": event_id,
                 "respuesta": datos,
             }
