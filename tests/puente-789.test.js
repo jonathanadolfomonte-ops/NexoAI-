@@ -122,3 +122,32 @@ test("si Meta falla, permite reintentar el mismo evento", async () => {
   assert.equal(res2.statusCode, 200);
   assert.equal(llamadas, 2);
 });
+
+test("no dispara dos envíos simultáneos para el mismo evento", async () => {
+  let llamadas = 0;
+  let liberar;
+  const espera = new Promise((resolve) => { liberar = resolve; });
+  const handler = crearPuenteAlertas({
+    tokenServicio: "servicio-secreto-de-prueba",
+    metaToken: "token-meta-falso",
+    phoneNumberId789: "1234567890123456",
+    destinatario: "5493870000000",
+    habilitarEnvioReal: true,
+    fetchImpl: async () => {
+      llamadas++;
+      await espera;
+      return { ok: true };
+    },
+  });
+  const res1 = respuesta();
+  const res2 = respuesta();
+  const primero = handler(peticion({ body: evento }), res1);
+  await Promise.resolve();
+  await Promise.resolve();
+  await handler(peticion({ body: evento }), res2);
+  liberar();
+  await primero;
+  assert.equal(llamadas, 1);
+  assert.equal(res2.statusCode, 202);
+  assert.equal(res2.payload.en_proceso, true);
+});
