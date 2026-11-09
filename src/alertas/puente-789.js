@@ -15,8 +15,8 @@ function compararSecretos(a, b) {
 
 function limpiarDetalle(valor) {
   return String(valor || "")
-    .replace(/[\\r\\n\\t]+/g, " ")
-    .replace(/[\\u0000-\\u001F\\u007F]/g, "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
     .trim()
     .slice(0, 280);
 }
@@ -41,7 +41,7 @@ export function crearPuenteAlertas({
 
   return async function manejarAlerta(req, res) {
     const auth = req.headers?.authorization || "";
-    const match = /^Bearer\\s+(.+)$/i.exec(String(auth));
+    const match = /^Bearer\s+(.+)$/i.exec(String(auth));
     if (!match || !compararSecretos(match[1], tokenServicio)) {
       return res.status(401).json({ error: "No autorizado." });
     }
@@ -76,7 +76,7 @@ export function crearPuenteAlertas({
       });
     }
 
-    if (!tokenServicio || !metaToken || !phoneNumberId789 || !/^\\d{8,24}$/.test(String(destinatario || ""))) {
+    if (!tokenServicio || !metaToken || !phoneNumberId789 || !/^\d{8,24}$/.test(String(destinatario || ""))) {
       return res.status(503).json({ error: "Configuración de envío incompleta." });
     }
     if (typeof fetchImpl !== "function") {
@@ -88,7 +88,7 @@ export function crearPuenteAlertas({
       "Se detectó una posible emergencia que requiere tu atención.",
       "Tipo: " + categoria.replace(/_/g, " "),
       detalle ? "Detalle: " + detalle : "",
-    ].filter(Boolean).join("\\n");
+    ].filter(Boolean).join("\n");
 
     let respuesta;
     try {
