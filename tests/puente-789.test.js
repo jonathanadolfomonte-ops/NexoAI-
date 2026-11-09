@@ -61,7 +61,7 @@ test("envía solo al destino fijo configurado y usa el ID emisor 789", async () 
   const res = respuesta();
   await handler(peticion({ body: evento }), res);
   assert.equal(res.statusCode, 200);
-  assert.match(llamada.url, /1234567890123456\\/messages$/);
+  assert.match(llamada.url, /1234567890123456\/messages$/);
   const body = JSON.parse(llamada.options.body);
   assert.equal(body.to, "5493870000000");
   assert.equal(body.type, "text");
