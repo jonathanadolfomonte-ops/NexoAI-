@@ -6,6 +6,7 @@ import OpenAI from "openai";
 import { manejarAgenda } from "./agenda.js";
 import { registrarApiApp } from "./app-api.js";
 import { limitePorNumero } from "./limite.js";
+import { crearPuenteAlertas } from "./src/alertas/puente-789.js";
 
 const {
   PORT = 3000,
@@ -108,6 +109,18 @@ app.use(
     },
   })
 );
+
+// Puente de alertas de emergencia: aislado y desactivado para envíos reales por defecto.
+// 789 es el EMISOR Cloud API; 084 es el WhatsApp personal que RECIBE la alerta.
+const manejarAlerta789 = crearPuenteAlertas({
+  tokenServicio: process.env.LINDSY_ALERT_BRIDGE_TOKEN,
+  metaToken: process.env.META_ACCESS_TOKEN_789,
+  phoneNumberId789: process.env.META_PHONE_NUMBER_ID_789,
+  destinatario: process.env.ALERTA_DESTINATARIO_084,
+  versionApi: WHATSAPP_API_VERSION,
+  habilitarEnvioReal: process.env.ENABLE_REAL_ALERTS === "true",
+});
+app.post("/api/alertas/emergencia", manejarAlerta789);
 
 app.get("/", (_req, res) => res.send(modoSoloPersonal ? "NexoAI Personal activo" : "NexoAI WhatsApp activo"));
 
