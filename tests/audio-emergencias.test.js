@@ -13,6 +13,12 @@ test("no alerta con confianza por debajo del umbral", () => {
   assert.equal(r.emergencia, false);
 });
 
+test("no acepta una confianza fuera del rango 0 a 1", () => {
+  const r = interpretarClasificacion({ emergency: true, confidence: 1.5, reason: "Valor inválido" });
+  assert.equal(r.emergencia, false);
+  assert.equal(r.confianza, 0);
+});
+
 test("no alerta ante una transcripción inválida", () => {
   const r = interpretarClasificacion("esto no es json");
   assert.equal(r.emergencia, false);
