@@ -663,11 +663,15 @@ async function procesar(m, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
     }
   }
 
-  if (m.type === "audio" && groq && m.audio?.id) {
+  if (m.type === "audio") {
     const esPersonal = PERSONAL_WHATSAPP_PHONE_NUMBER_ID
       ? phoneNumberId === PERSONAL_WHATSAPP_PHONE_NUMBER_ID
       : Boolean(numeroPersonal && String(numero || "").replace(/\D/g, "") === numeroPersonal);
     if (esPersonal) {
+      if (!groq || !m.audio?.id) {
+        console.error("Audio personal sin motor de transcripción disponible; no se responde automáticamente.");
+        return;
+      }
       let texto;
       try {
         texto = await transcribirAudio(m.audio.id);
@@ -692,8 +696,8 @@ async function procesar(m, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
         return;
       }
 
-      if (esJonathan(numero)) {
-        console.log("Audio urgente enviado por el propio dueño: no se genera una alerta hacia sí mismo");
+      if (esJonathan(numero) || (NUMERO_ALERTA_EMERGENCIA && ultimos10(numero) === ultimos10(NUMERO_ALERTA_EMERGENCIA))) {
+        console.log("Audio urgente enviado desde el número privado del dueño: no se genera una alerta hacia sí mismo");
         return;
       }
       if (!NUMERO_ALERTA_EMERGENCIA) {
