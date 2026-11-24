@@ -702,9 +702,9 @@ async function procesar(m, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
       }
 
       const alerta =
-        `🚨 EMERGENCIA DETECTADA POR LINDSY\\n\\n` +
-        `Remitente: +${String(numero || "").replace(/\\D/g, "")}\\n` +
-        `Motivo detectado: ${clasificacion.motivo || "Peligro grave e inmediato"}\\n\\n` +
+        `🚨 EMERGENCIA DETECTADA POR LINDSY\n\n` +
+        `Remitente: +${String(numero || "").replace(/\D/g, "")}\n` +
+        `Motivo detectado: ${clasificacion.motivo || "Peligro grave e inmediato"}\n\n` +
         `Transcripción: “${texto.slice(0, 1200)}”`;
       const avisoEnviado = await enviar(NUMERO_ALERTA_EMERGENCIA, alerta, phoneNumberId);
       if (!avisoEnviado) {
