@@ -3,11 +3,12 @@ const UMBRAL_EMERGENCIA = 0.85;
 export function interpretarClasificacion(contenido) {
   try {
     const dato = typeof contenido === "string" ? JSON.parse(contenido) : contenido;
-    const confianza = Number(dato?.confidence);
-    const emergencia = dato?.emergency === true && Number.isFinite(confianza) && confianza >= UMBRAL_EMERGENCIA;
+    const confianza = dato?.confidence;
+    const confianzaValida = typeof confianza === "number" && Number.isFinite(confianza) && confianza >= 0 && confianza <= 1;
+    const emergencia = dato?.emergency === true && confianzaValida && confianza >= UMBRAL_EMERGENCIA;
     return {
       emergencia,
-      confianza: Number.isFinite(confianza) ? confianza : 0,
+      confianza: confianzaValida ? confianza : 0,
       motivo: String(dato?.reason || "").slice(0, 240),
     };
   } catch {
