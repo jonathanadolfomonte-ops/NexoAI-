@@ -658,7 +658,7 @@ async function procesar(m, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
     const lim = limitePorNumero(numero);
     if (!lim.permitido) {
       console.log(`Limite (${lim.motivo}) alcanzado para ${numero}: se ignora el mensaje`);
-      if (lim.avisar) await enviar(numero, "Recibí muchos mensajes seguidos. Para no saturarme, probá de nuevo en un rato. ¡Gracias!", phoneNumberId);
+      if (lim.avisar && m.type !== "audio") await enviar(numero, "Recibí muchos mensajes seguidos. Para no saturarme, probá de nuevo en un rato. ¡Gracias!", phoneNumberId);
       return;
     }
   }
