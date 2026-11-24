@@ -6,6 +6,7 @@ import OpenAI from "openai";
 import { manejarAgenda } from "./agenda.js";
 import { registrarApiApp } from "./app-api.js";
 import { limitePorNumero } from "./limite.js";
+import { clasificarEmergencia } from "./audio-emergencias.js";
 
 const {
   PORT = 3000,
@@ -24,6 +25,8 @@ const {
   WHATSAPP_API_VERSION = "v21.0",
   // Numero del dueño que recibe el aviso de cada pedido confirmado (formato 549 + area + numero, sin + ni 15)
   OWNER_WHATSAPP_NUMBER,
+  // Destino privado exclusivo para alertas de emergencias detectadas en audios.
+  EMERGENCY_ALERT_WHATSAPP_NUMBER,
   // Horas que el bot se queda callado con un cliente cuando el dueño le responde desde la app (coexistencia)
   PAUSA_HORAS = "8",
   // Planilla de Google donde se registran las conversaciones (Apps Script). Opcional.
@@ -244,6 +247,8 @@ app.post("/webhook", (req, res) => {
 // Aviso a Jonathan (su línea 084) cuando alguien pide hablar con él por Lindsy.
 // Sale desde la línea de Lindsy: WhatsApp solo lo entrega si Jonathan le escribió al 789 en las últimas 24 h.
 const NUMERO_AVISO_JONATHAN = String(OWNER_WHATSAPP_NUMBER || "5493873441084").replace(/\D/g, "");
+// Sin valor predeterminado: nunca reutilizar por accidente el canal 084 para emergencias.
+const NUMERO_ALERTA_EMERGENCIA = String(EMERGENCY_ALERT_WHATSAPP_NUMBER || "").replace(/\D/g, "");
 const avisosJonathan = new Map();
 // Solicitudes de contacto pendientes de autorización. Son temporales y se pierden si el proceso reinicia.
 const solicitudesContacto = new Map();
@@ -667,13 +672,48 @@ async function procesar(m, phoneNumberId = ID_TELEFONO_PREDETERMINADO) {
       try {
         texto = await transcribirAudio(m.audio.id);
       } catch (err) {
-        console.error("Error con audio:", err.message);
-        await enviar(numero, err.aviso || "No pude escuchar tu audio. ¿Me lo escribís?", phoneNumberId);
+        // Los audios comunes no reciben respuestas automáticas; si no se puede transcribir,
+        // no se afirma que Lindsy haya escuchado ni evaluado el contenido.
+        console.error("No se pudo evaluar el audio:", err.message);
         return;
       }
       console.log(`Audio de ${numero} transcripto (${texto.length} caracteres)`);
-      await enviar(numero, `🎧 Te escuché: “${texto.slice(0, 300)}”`, phoneNumberId);
-      await procesarAsistentePersonal(numero, texto, phoneNumberId, true);
+
+      let clasificacion;
+      try {
+        clasificacion = await clasificarEmergencia(texto, groq, GROQ_MODEL);
+      } catch (err) {
+        console.error("Falló la clasificación de emergencia; se omite la alerta para evitar falsos positivos:", err?.message || err);
+        return;
+      }
+
+      if (!clasificacion.emergencia) {
+        console.log(`Audio común o no concluyente de ${numero}: no se responde automáticamente`);
+        return;
+      }
+
+      if (esJonathan(numero)) {
+        console.log("Audio urgente enviado por el propio dueño: no se genera una alerta hacia sí mismo");
+        return;
+      }
+      if (!NUMERO_ALERTA_EMERGENCIA) {
+        console.error("EMERGENCY_ALERT_WHATSAPP_NUMBER no está configurado; no se envía alerta ni se promete aviso al remitente.");
+        return;
+      }
+
+      const alerta =
+        `🚨 EMERGENCIA DETECTADA POR LINDSY\\n\\n` +
+        `Remitente: +${String(numero || "").replace(/\\D/g, "")}\\n` +
+        `Motivo detectado: ${clasificacion.motivo || "Peligro grave e inmediato"}\\n\\n` +
+        `Transcripción: “${texto.slice(0, 1200)}”`;
+      const avisoEnviado = await enviar(NUMERO_ALERTA_EMERGENCIA, alerta, phoneNumberId);
+      if (!avisoEnviado) {
+        console.error("WhatsApp no confirmó el envío de la alerta de emergencia.");
+        return;
+      }
+
+      await enviar(numero, "Ahora mismo le informo a Zony", phoneNumberId);
+      console.log("Alerta de emergencia aceptada por WhatsApp para el canal privado configurado.");
       return;
     }
   }
