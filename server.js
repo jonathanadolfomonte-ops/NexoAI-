@@ -111,6 +111,11 @@ app.use(
 
 app.get("/", (_req, res) => res.send(modoSoloPersonal ? "NexoAI Personal activo" : "NexoAI WhatsApp activo"));
 
+// Endpoint de salud aislado: no consulta Meta ni proveedores externos.
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ ok: true, service: modoSoloPersonal ? "personal" : "whatsapp", timestamp: new Date().toISOString() });
+});
+
 // ---- Registro en planilla (inicio)
 // Guarda cada conversacion en una planilla de Google (via Apps Script).
 // Si no estan cargadas WEBHOOK_PLANILLA_URL y PLANILLA_CLAVE, no hace nada.
