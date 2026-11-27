@@ -52,6 +52,8 @@ const claude = modoSoloPersonal ? null : new Anthropic({ apiKey: ANTHROPIC_API_K
 const groq = GROQ_API_KEY
   ? new OpenAI({ apiKey: GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" })
   : null;
+const LINDSY_BROWSER_SEARCH = process.env.LINDSY_BROWSER_SEARCH !== "false";
+const MODELOS_CON_BUSQUEDA = new Set(["openai/gpt-oss-20b", "openai/gpt-oss-120b"]);
 const numeroPersonal = String(PERSONAL_WHATSAPP_NUMBER || "").replace(/\D/g, "");
 
 // Plantilla de conversación de Lindsy (editable en instrucciones-lindsy.md)
@@ -601,6 +603,7 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
   historial.push({ role: "user", content: texto });
 
   try {
+    const puedeBuscar = LINDSY_BROWSER_SEARCH && MODELOS_CON_BUSQUEDA.has(GROQ_MODEL);
     const r = await groq.chat.completions.create({
       model: GROQ_MODEL,
       messages: [
@@ -610,7 +613,12 @@ async function procesarAsistentePersonal(numero, texto, phoneNumberId = ID_TELEF
         },
         ...historial,
       ],
-      max_tokens: 600,
+      ...(puedeBuscar ? {
+        tools: [{ type: "browser_search" }],
+        tool_choice: "auto",
+        reasoning_effort: "low",
+        max_completion_tokens: 1800,
+      } : { max_tokens: 600 }),
     });
 
     const respuesta = String(r.choices?.[0]?.message?.content || "").trim() ||
