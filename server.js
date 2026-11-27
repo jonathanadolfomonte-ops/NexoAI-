@@ -229,45 +229,51 @@ const ID_TELEFONO_PERSONAL_789 = process.env.REENVIAR_PHONE_NUMBER_ID || "136926
 const REENVIAR_URL = process.env.REENVIAR_URL || "https://nexoai-personal.onrender.com/webhook";
 
 async function reenviarAlPersonal(req) {
-  // El servicio personal (plan gratis) puede estar dormido: el primer intento falla mientras arranca.
-  // Se reintenta varias veces para que el mensaje no se pierda.
   const cuerpo = req.rawBody;
   const firma = req.get("x-hub-signature-256") || "";
-  // Render no despierta un servicio dormido con un POST (devuelve 502 al instante): se lo despierta primero con un GET.
+  const urlSalud = `${new URL(REENVIAR_URL).origin}/healthz`;
+
+  // Una sola comprobación liviana. Evita ráfagas de GET que pueden activar límites 429.
   try {
-    const despertar = await fetch(`${new URL(REENVIAR_URL).origin}/webhook`, { signal: AbortSignal.timeout(80000) });
-    console.log("Asistente personal despierto:", despertar.status);
-  } catch (err) {
-    console.error("No se pudo despertar al asistente personal:", err?.message || err);
-  }
-  // Primero se despierta el servicio personal con una consulta simple (GET) y se espera a que responda.
-  const urlBase = REENVIAR_URL.replace(/\/webhook\/?$/, "/");
-  for (let w = 0; w < 18; w++) {
-    try {
-      const rw = await fetch(urlBase, { method: "GET", signal: AbortSignal.timeout(25000) });
-      console.log(`Asistente personal despierto (consulta ${w + 1}):`, rw.status);
-      if (rw.status < 500) break;
-    } catch (err) {
-      console.log(`Despertando al asistente personal (consulta ${w + 1})...`);
+    const salud = await fetch(urlSalud, { method: "GET", signal: AbortSignal.timeout(12000) });
+    console.log("Salud del asistente personal:", salud.status);
+    if (!salud.ok) {
+      console.error("El asistente personal no está listo; no se inicia una ráfaga de reintentos.");
+      return;
     }
-    await new Promise((ok) => setTimeout(ok, 5000));
+  } catch (err) {
+    console.error("No se pudo comprobar la salud del asistente personal:", err?.message || err);
+    return;
   }
-  const ESPERAS_MS = [0, 8000, 15000, 20000, 25000, 30000, 40000, 60000, 60000, 60000];
-  for (let i = 0; i < ESPERAS_MS.length; i++) {
-    if (ESPERAS_MS[i]) await new Promise((ok) => setTimeout(ok, ESPERAS_MS[i]));
+
+  // Reintentos acotados solo ante fallos transitorios del servidor/red.
+  // Un 429 se registra y se respeta: no se insiste para no agravar el rate limit.
+  const esperas = [0, 5000, 15000];
+  for (let i = 0; i < esperas.length; i++) {
+    if (esperas[i]) await new Promise((ok) => setTimeout(ok, esperas[i]));
     try {
       const r = await fetch(REENVIAR_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Hub-Signature-256": firma },
         body: cuerpo,
+        signal: AbortSignal.timeout(20000),
       });
       console.log(`Reenviado al asistente personal (intento ${i + 1}):`, r.status);
       if (r.ok) return;
+      if (r.status === 429) {
+        const retryAfter = r.headers.get("retry-after");
+        console.error("Asistente personal respondió 429; se detienen los reintentos.", retryAfter ? `Retry-After: ${retryAfter}` : "");
+        return;
+      }
+      if (r.status < 500) {
+        console.error("Error no transitorio del asistente personal; no se reintenta:", r.status);
+        return;
+      }
     } catch (err) {
-      console.error(`Error reenviando al asistente personal (intento ${i + 1}):`, err);
+      console.error(`Error de red reenviando al asistente personal (intento ${i + 1}):`, err?.message || err);
     }
   }
-  console.error("No se pudo reenviar al asistente personal tras varios intentos");
+  console.error("No se pudo reenviar al asistente personal tras 3 intentos acotados");
 }
 // ---- Reenvio del 789 al asistente personal (fin)
 
