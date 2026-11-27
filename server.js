@@ -262,7 +262,10 @@ async function reenviarAlPersonal(req) {
       if (r.ok) return;
       if (r.status === 429) {
         const retryAfter = r.headers.get("retry-after");
-        console.error("Asistente personal respondió 429; se detienen los reintentos.", retryAfter ? `Retry-After: ${retryAfter}` : "");
+        const servidor = r.headers.get("server") || "";
+        const requestId = r.headers.get("x-request-id") || r.headers.get("cf-ray") || "";
+        const detalle = (await r.text().catch(() => "")).slice(0, 500);
+        console.error("Asistente personal respondió 429; se detienen los reintentos.", JSON.stringify({ retryAfter, servidor, requestId, detalle }));
         return;
       }
       if (r.status < 500) {
